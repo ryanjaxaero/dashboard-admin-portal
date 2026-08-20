@@ -86,6 +86,7 @@ function jaxauth_registry() {
     'sales'     => ['Sales pipeline', 'revenue + pipeline dashboard'],
     'tax'       => ['Sales tax', 'aircraft sales tax page'],
     'requests'  => ['Punch list & requests', 'request board'],
+    'expense'   => ['Add expenses', 'enter expenses on the owner P/L'],
     'invoice'   => ['Own Instructor Invoice', 'only the bound instructor'],
     'access'    => ['Access admin', 'this admin panel'],
   ];
