@@ -1,0 +1,882 @@
+<title>JAXAERO Access Admin</title>
+<style id="css">
+  :root{
+    --bg:#F4F6F9; --card:#ffffff; --ink:#1F2F54; --mut:#5b6577; --faint:#8b93a3;
+    --line:#e6e9ef; --brand:#C10F1B; --tan:#C0A788; --navy:#1F2F54; --bar:#3A5688;
+    --ok:#0f7a4d; --okbg:#e3f5ec; --warnbg:#fdf3e2; --warn:#8a5b00;
+    --redbg:#fbe9ea; --redln:#f0c4c7; --redtx:#8f1219;
+    --offbg:#eef1f5; --shadow:0 1px 3px rgba(20,35,70,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI",Roboto,-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;font-size:15px;line-height:1.5}
+  .wrap{max-width:1060px;margin:0 auto;padding:18px 20px 60px}
+  .mut{color:var(--mut)} .small{font-size:12.5px}
+  a{color:var(--brand)}
+  .bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    border-bottom:3px solid var(--tan);padding:10px 0 12px;margin-bottom:20px}
+  .bar .brand{font-weight:800;letter-spacing:.14em;font-size:14px;color:var(--brand)}
+  .bar .proto{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--warn);
+    background:var(--warnbg);border:1px solid #f0dcb2;border-radius:999px;padding:2px 9px}
+  .bar .sp{flex:1}
+  .bar .who{font-size:13px;color:var(--mut)}
+  .bar .who b{color:var(--ink)}
+  .navb{border:1px solid var(--line);background:var(--card);color:var(--navy);border-radius:8px;
+    padding:6px 13px;font-size:12.5px;font-weight:700;cursor:pointer}
+  .navb:hover{border-color:var(--tan)}
+  .navb.red{background:var(--brand);border-color:var(--brand);color:#fff}
+  .navb:disabled{opacity:.5;cursor:default}
+  button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+  .preview{display:none;align-items:center;gap:12px;background:#eef2fb;border:1px solid #ccd7ef;
+    border-radius:10px;padding:9px 14px;margin:-6px 0 18px;font-size:13.5px}
+  .preview.on{display:flex;flex-wrap:wrap}
+  .notice{display:none;background:var(--warnbg);border:1px solid #f0dcb2;color:var(--warn);
+    border-radius:10px;padding:9px 14px;margin:-6px 0 18px;font-size:13px}
+  .notice.on{display:block}
+  .screen{display:none}
+  .screen.on{display:block}
+  .mod{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:22px;box-shadow:var(--shadow)}
+  .ph{margin-bottom:16px}
+  .ph h1{margin:0 0 2px;font-size:24px;font-weight:800;letter-spacing:-.01em;text-wrap:balance}
+  .ph .sub{color:var(--mut);font-size:13.5px}
+  .tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;border-radius:999px;padding:2px 9px;vertical-align:2px}
+  .tag.live{background:var(--okbg);color:var(--ok)}
+  .tag.samp{color:var(--faint);border:1px dashed #cfd5df}
+  .signin{max-width:400px;margin:36px auto 0}
+  .signin .brand2{text-align:center;font-weight:800;letter-spacing:.14em;font-size:14px;color:var(--brand);margin-bottom:4px}
+  .signin h2{text-align:center;margin:0 0 18px;font-size:20px;font-weight:800}
+  .fld{margin-bottom:14px}
+  .fld label{display:block;font-size:12.5px;font-weight:700;letter-spacing:.03em;color:var(--mut);margin-bottom:5px;text-transform:uppercase}
+  .fld input,.fld select{width:100%;border:1px solid var(--line);border-radius:9px;padding:11px 12px;font-size:15px;color:var(--ink);background:#fff}
+  .remember{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--mut);margin:4px 0 16px}
+  .btn{display:inline-block;border:0;border-radius:9px;padding:11px 20px;font-size:14.5px;
+    font-weight:700;cursor:pointer;background:var(--navy);color:#fff}
+  .btn:disabled{opacity:.6;cursor:default}
+  .btn.full{width:100%}
+  .btn.red{background:var(--brand)}
+  .err{display:none;background:var(--redbg);border:1px solid var(--redln);color:var(--redtx);border-radius:9px;
+    padding:10px 12px;font-size:13.5px;margin-bottom:14px}
+  .err.on{display:block}
+  .demos{max-width:430px;margin:18px auto 0;text-align:center}
+  .demos .small{margin-bottom:8px}
+  .demos .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:10px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+  .pcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;
+    box-shadow:var(--shadow);cursor:pointer;text-align:left;font:inherit;color:var(--ink)}
+  .pcard:hover{border-color:var(--tan)}
+  .pcard h3{margin:0 0 6px;font-size:16px;font-weight:800}
+  .pcard p{margin:0;font-size:13px;color:var(--mut)}
+  .pcard .go{margin-top:12px;font-size:12.5px;font-weight:700;color:var(--brand);letter-spacing:.03em}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+  .kpi .l{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
+  .kpi .v{font-size:22px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
+  .kpi .d{font-size:11.5px;color:var(--mut);margin-top:2px}
+  .wgt{margin-bottom:16px}
+  .wgt h3{margin:0 0 2px;font-size:16px;font-weight:800}
+  .wgt .wsub{font-size:12.5px;color:var(--mut);margin-bottom:12px}
+  table.t{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  .t th{text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);
+    font-weight:700;padding:7px 10px;border-bottom:1px solid var(--line)}
+  .t td{padding:8px 10px;border-bottom:1px solid var(--line);font-size:13.5px}
+  .t tr:last-child td{border-bottom:0}
+  .t td.n,.t th.n{text-align:right}
+  .t tr.ft td{font-weight:800;border-top:2px solid var(--line);border-bottom:0}
+  .twrap{overflow-x:auto}
+  .pill{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;border-radius:999px;padding:2px 9px}
+  .pill.g{background:var(--okbg);color:var(--ok)}
+  .pill.y{background:var(--warnbg);color:var(--warn)}
+  .pill.r{background:var(--redbg);color:var(--redtx)}
+  .chart{position:relative;height:190px;display:flex;align-items:flex-end;justify-content:center;gap:4px;
+    padding:6px 4px 0;border-bottom:1px solid var(--line)}
+  .cb{flex:1;max-width:56px;background:var(--bar);border-radius:4px 4px 0 0;position:relative;min-height:3px;cursor:default}
+  .cb:hover{background:#54719f}
+  .cb .lab{position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:11px;
+    font-weight:700;color:var(--mut);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .cxd{display:flex;justify-content:center;gap:4px;padding:4px 4px 0}
+  .cxd span{flex:1;max-width:56px;text-align:center;font-size:10px;color:var(--faint)}
+  .ctip{position:fixed;display:none;background:var(--navy);color:#fff;font-size:12px;border-radius:7px;
+    padding:5px 10px;pointer-events:none;z-index:40;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .gline{position:absolute;left:0;right:0;border-top:1px dashed #edf0f4;font-size:10px;color:var(--faint)}
+  .gline i{position:absolute;left:2px;top:-15px;font-style:normal;background:var(--card);padding:0 3px}
+  .denied{max-width:480px;margin:40px auto;text-align:center}
+  .denied h2{font-size:19px;margin:0 0 6px}
+  .admin{display:grid;grid-template-columns:290px 1fr;gap:16px;align-items:start}
+  @media(max-width:860px){.admin{grid-template-columns:1fr}}
+  .ulist{padding:12px;max-height:720px;overflow-y:auto}
+  .ulist .top{display:flex;justify-content:space-between;align-items:center;padding:6px 8px 12px}
+  .ulist .top b{font-size:14px}
+  .urow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;
+    border:0;border-radius:9px;padding:8px 10px;cursor:pointer;font:inherit;color:var(--ink)}
+  .urow:hover{background:var(--bg)}
+  .urow.on{background:var(--navy);color:#fff}
+  .urow.on .um{color:#c6cddd}
+  .urow .nm{font-weight:700;font-size:13.5px}
+  .um{display:block;font-size:11.5px;color:var(--mut)}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .dot.a{background:var(--ok)} .dot.d{background:#c3c9d4}
+  .chip{margin-left:auto;flex:none;font-size:10.5px;font-weight:700;letter-spacing:.05em;
+    border-radius:999px;padding:2px 8px;background:var(--offbg);color:var(--mut)}
+  .urow.on .chip{background:rgba(255,255,255,.16);color:#fff}
+  .chip.adm{background:#f8e2e4;color:var(--brand)}
+  .divide{border-top:1px solid var(--line);margin:8px 6px}
+  .detail .idrow{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;
+    border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:16px}
+  .detail .idrow .fld{margin:0;min-width:170px;flex:1}
+  .ckline{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--mut);padding-bottom:2px}
+  .actbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+  .tpl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .tpl span{font-size:12px;font-weight:700;letter-spacing:.05em;color:var(--faint);text-transform:uppercase}
+  .tplb{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 14px;
+    font-size:12.5px;font-weight:600;color:var(--navy);cursor:pointer}
+  .tplb:hover{border-color:var(--tan)}
+  table.mx{width:100%;border-collapse:collapse}
+  .mx th{text-align:left;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--faint);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--line)}
+  .mx td{padding:9px 10px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
+  .mx tr:last-child td{border-bottom:0}
+  .mx tr.page td:first-child{font-weight:800}
+  .mx tr.child td:first-child{padding-left:32px;color:var(--mut)}
+  .mx .desc{font-size:12.5px;color:var(--faint)}
+  .mx tr.dim td{opacity:.42}
+  .tg{position:relative;width:42px;height:24px;border-radius:999px;border:0;cursor:pointer;
+    background:#cfd5df;transition:background .12s;flex:none}
+  .tg::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
+    background:#fff;transition:left .12s;box-shadow:0 1px 2px rgba(0,0,0,.18)}
+  .tg.on{background:var(--ok)}
+  .tg.on::after{left:21px}
+  @media(prefers-reduced-motion:reduce){.tg,.tg::after,.cb{transition:none}}
+  .savebar{display:flex;justify-content:space-between;align-items:center;gap:12px;
+    border-top:1px solid var(--line);margin-top:14px;padding-top:16px;flex-wrap:wrap}
+  .savedmsg{font-size:13px;color:var(--ok);font-weight:700;opacity:0;transition:opacity .2s}
+  .savedmsg.show{opacity:1}
+  .audit{margin-top:16px}
+  .audit h3{margin:0 0 4px;font-size:16px;font-weight:800}
+  .audit .small{margin-bottom:10px}
+  .arow{display:flex;gap:14px;padding:9px 4px;border-top:1px solid var(--line);font-size:13.5px}
+  .arow time{flex:none;width:130px;color:var(--faint);font-variant-numeric:tabular-nums;font-size:12.5px;padding-top:1px}
+  .arow b{font-weight:700}
+  .fnote{font-size:12px;color:var(--faint);margin-top:10px;line-height:1.5}
+</style>
+
+<template id="tpl">
+  <div class="wrap">
+    <div class="bar">
+      <span class="brand">JAXAERO</span>
+      <span class="proto">PROTOTYPE - REAL AUG 13 DATA, DEMO SIGN-IN</span>
+      <span class="sp"></span>
+      <span class="who" id="whoBar" hidden>Signed in as <b id="whoName"></b></span>
+      <button class="navb" id="navHome" hidden>Home</button>
+      <button class="navb" id="navAdmin" hidden>Access admin</button>
+      <button class="navb red" id="navOut" hidden>Sign out</button>
+    </div>
+
+    <div class="notice" id="storeNote"></div>
+
+    <div class="preview" id="pvBanner">
+      <b>Previewing as <span id="pvName"></span></b>
+      <span class="mut small">You are seeing exactly what this account sees.</span>
+      <span class="sp" style="flex:1"></span>
+      <button class="navb" id="pvExit">Exit preview</button>
+    </div>
+
+    <div class="screen on" id="scr-signin">
+      <div class="mod signin">
+        <div class="brand2">JAXAERO</div>
+        <h2>Sign in to your dashboard</h2>
+        <div class="err" id="siErr">That email and password combination did not work.</div>
+        <div class="fld"><label for="em">Email address</label>
+          <input id="em" type="email" autocomplete="off" placeholder="you@flyjaxaero.com"></div>
+        <div class="fld"><label for="pw">Password</label>
+          <input id="pw" type="password" autocomplete="off" placeholder="any password works in the prototype"></div>
+        <label class="remember"><input type="checkbox" checked> Keep me signed in for 14 days</label>
+        <button class="btn red full" id="siGo">Sign in</button>
+        <p class="small" style="color:var(--faint);text-align:center;margin-top:14px;line-height:1.55">
+          Forgot your password? Contact Ryan for a new temporary one.<br>
+          Five failed attempts locks sign-in for 15 minutes.<br>
+          This page never asks for a Flight Schedule Pro login.</p>
+      </div>
+      <div class="demos">
+        <div class="small mut">Prototype shortcuts - sign in with one tap:</div>
+        <div class="row">
+          <button class="navb" data-demo="ryan">Ryan (admin)</button>
+          <button class="navb" data-demo="beng">Ben Gabriel (admin)</button>
+          <button class="navb" data-demo="rachael">Rachael (tax)</button>
+        </div>
+        <div class="fld" style="max-width:300px;margin:0 auto"><label for="asCfi">Or sign in as any instructor</label>
+          <select id="asCfi"><option value="">choose an instructor...</option></select></div>
+        <p class="small mut" style="margin-top:10px">Demo emails are first initial + last name at flyjaxaero.com.
+          Unknown and disabled accounts get the same generic failure, so the form never
+          reveals which emails exist.</p>
+      </div>
+    </div>
+
+    <div class="screen" id="scr-home">
+      <div class="ph"><h1 id="homeHi">Welcome</h1>
+        <div class="sub">Everything your account can open. Cards appear and disappear as an admin changes your access.</div></div>
+      <div class="cards" id="homeCards"></div>
+    </div>
+
+    <div class="screen" id="scr-rev">
+      <div class="ph"><h1>Revenue <span class="tag live">REAL DATA - AUG 13 SNAPSHOT</span></h1>
+        <div class="sub">August 2026, verified Aug 13, 12:30 PM &middot; <span id="stalePill"></span></div></div>
+      <div class="kpis">
+        <div class="kpi"><div class="l">Earned this month</div><div class="v" id="kEarn"></div><div class="d">official FSP subtotal, Aug 1-13</div></div>
+        <div class="kpi"><div class="l">Unbilled</div><div class="v" id="kUnb"></div><div class="d">real invoices, bill overnight</div></div>
+        <div class="kpi"><div class="l">Goal progress</div><div class="v" id="kGoal"></div><div class="d" id="kGoalD"></div></div>
+        <div class="kpi"><div class="l">Year to date</div><div class="v" id="kYtd"></div><div class="d">billed 2026</div></div>
+      </div>
+      <div class="mod wgt" data-w="rev.mom">
+        <h3>Month over month</h3><div class="wsub">Verified monthly billed revenue, 2026.</div>
+        <div class="twrap"><table class="t" id="momT"></table></div>
+      </div>
+      <div class="mod wgt" data-w="rev.category">
+        <h3>Revenue by category</h3><div class="wsub">From the verified FSP category report, Aug 1-13. Surcharges and fees
+          are shown but are never counted as revenue; packages and deposits never appear here at all.</div>
+        <div class="twrap"><table class="t" id="catT"></table></div>
+      </div>
+      <div class="mod wgt" data-w="rev.chart">
+        <h3>Billed revenue by month</h3><div class="wsub">January through July verified; August is partial (through Aug 13). Hover a bar for the exact figure.</div>
+        <div class="chart" id="mchart" aria-label="Verified billed revenue by month, 2026"></div>
+        <div class="cxd" id="mchartx"></div>
+      </div>
+    </div>
+
+    <div class="screen" id="scr-auto">
+      <div class="ph"><h1>Revenue - AUTO <span class="tag live">REAL DATA - AUG 13 SNAPSHOT</span></h1>
+        <div class="sub">The live page auto-refreshes hourly from the office machine. This prototype shows the Aug 13 verified figures. <span id="stalePill2"></span></div></div>
+      <div class="kpis">
+        <div class="kpi"><div class="l">Earned this month</div><div class="v" id="kEarn2"></div><div class="d">official FSP subtotal</div></div>
+        <div class="kpi"><div class="l">Unbilled</div><div class="v" id="kUnb2"></div><div class="d">exact, bills overnight</div></div>
+        <div class="kpi"><div class="l">Monthly goal</div><div class="v" id="kGoal2"></div><div class="d" id="kGoalD2"></div></div>
+      </div>
+      <div class="mod wgt" data-w="auto.tax">
+        <h3>Sales tax by aircraft <span class="tag samp">SAMPLE SHAPE</span></h3>
+        <div class="wsub">Real config: 7.5 percent, tracked tails N939SP and N963SP. The per-aircraft dollar detail
+          lives in the live dashboard cache and is not in the Aug 13 snapshot, so these two rows show the widget shape only.</div>
+        <div class="twrap"><table class="t">
+          <tr><th>Aircraft</th><th class="n">Taxable rental</th><th class="n">Tax at 7.5%</th></tr>
+          <tr><td>N939SP</td><td class="n">(live only)</td><td class="n">(live only)</td></tr>
+          <tr><td>N963SP</td><td class="n">(live only)</td><td class="n">(live only)</td></tr>
+        </table></div>
+      </div>
+      <div class="mod wgt" data-w="auto.payroll">
+        <h3>Instructor payroll <span class="tag live">REAL RATES AND BONUSES</span></h3>
+        <div class="wsub">Pay period <select id="ppSel" style="border:1px solid var(--line);border-radius:7px;padding:3px 8px;font-size:13px"></select>
+          &middot; rates are the real per-period locked rates; bonuses are the real hand-entered checkride and review records.</div>
+        <div class="twrap"><table class="t" id="payT"></table></div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="navb" data-w2="pay.rates" data-act="rates">Edit rates</button>
+          <button class="navb" data-w2="pay.events" data-act="events">Checkrides &amp; reviews</button>
+          <button class="navb" data-w2="pay.pdf" data-act="pdf">Invoice PDFs + CSV</button>
+        </div>
+        <div class="fnote">Instruction hours are computed from FSP and are deliberately not in the repo snapshot
+          (they rebuild nightly on the live site), so the hours and net pay columns show a dash here.
+          Everything with a dollar figure on this table is real.</div>
+      </div>
+    </div>
+
+    <div class="screen" id="scr-sales">
+      <div class="ph"><h1>Sales pipeline <span class="tag samp">SAMPLE DATA</span></h1>
+        <div class="sub">Pipeline data comes from ActiveCampaign snapshots that are not in the repo; these tables show the widget shapes.</div></div>
+      <div class="mod wgt" data-w="sales.pipeline">
+        <h3>Pipeline</h3><div class="wsub">Open opportunities by stage.</div>
+        <div class="twrap"><table class="t">
+          <tr><th>Stage</th><th class="n">People</th><th class="n">Est. value</th></tr>
+          <tr><td>Inquiry</td><td class="n">14</td><td class="n">$84,000</td></tr>
+          <tr><td>Discovery flight booked</td><td class="n">6</td><td class="n">$52,000</td></tr>
+          <tr><td>Enrollment pending</td><td class="n">3</td><td class="n">$36,000</td></tr>
+        </table></div>
+      </div>
+      <div class="mod wgt" data-w="sales.starts">
+        <h3>New starts</h3><div class="wsub">Students who began training this month.</div>
+        <div class="twrap"><table class="t">
+          <tr><th>Program</th><th class="n">Starts</th></tr>
+          <tr><td>Private pilot</td><td class="n">5</td></tr>
+          <tr><td>Instrument</td><td class="n">3</td></tr>
+        </table></div>
+      </div>
+      <div class="mod wgt" data-w="sales.studentload">
+        <h3>Student load</h3><div class="wsub">Active students per instructor.</div>
+        <div class="twrap"><table class="t">
+          <tr><th>Band</th><th class="n">Instructors</th></tr>
+          <tr><td>8+ students</td><td class="n">3</td></tr>
+          <tr><td>5-7 students</td><td class="n">9</td></tr>
+          <tr><td>Under 5</td><td class="n">5</td></tr>
+        </table></div>
+      </div>
+    </div>
+
+    <div class="screen" id="scr-tax">
+      <div class="ph"><h1>Sales tax <span class="tag samp">SHAPE ONLY</span></h1>
+        <div class="sub">Real config: 7.5 percent on tracked tails N939SP and N963SP. Dollar detail is in the live
+          dashboard cache, not the repo snapshot - the live page shows it expanded by default.</div></div>
+      <div class="mod wgt">
+        <h3>Per-aircraft detail</h3>
+        <div class="twrap"><table class="t">
+          <tr><th>Aircraft</th><th class="n">Taxable rental</th><th class="n">Rate</th><th class="n">Tax collected</th></tr>
+          <tr><td>N939SP</td><td class="n">(live only)</td><td class="n">7.5%</td><td class="n">(live only)</td></tr>
+          <tr><td>N963SP</td><td class="n">(live only)</td><td class="n">7.5%</td><td class="n">(live only)</td></tr>
+        </table></div>
+      </div>
+    </div>
+
+    <div class="screen" id="scr-invoice">
+      <div class="ph"><h1 id="invName">Instructor Invoice</h1>
+        <div class="sub">Always the instructor bound to the signed-in account - no account can open a colleague's invoice.
+          Pay period <select id="invPp" style="border:1px solid var(--line);border-radius:7px;padding:3px 8px;font-size:13px"></select></div></div>
+      <div class="kpis">
+        <div class="kpi"><div class="l">Hourly rate</div><div class="v" id="invRate"></div><div class="d" id="invRateD"></div></div>
+        <div class="kpi"><div class="l">Instruction hrs</div><div class="v">&mdash;</div><div class="d">from FSP, live site only</div></div>
+        <div class="kpi"><div class="l">Bonuses</div><div class="v" id="invBon"></div><div class="d" id="invBonD"></div></div>
+      </div>
+      <div class="mod wgt">
+        <h3>Bonus detail <span class="tag live">REAL RECORDS</span></h3>
+        <div class="wsub">The actual hand-entered checkride passes and Google review mentions for this period.</div>
+        <div class="twrap"><table class="t" id="invT"></table></div>
+        <div style="margin-top:14px"><button class="navb" data-act="pdf">View PDF</button> <button class="navb" data-act="pdf">Download PDF</button></div>
+        <div class="fnote">Base pay (hours x rate) is computed from FSP flight data, which is not in the repo snapshot.
+          On the live dashboard this page carries the full session detail and net pay.</div>
+      </div>
+    </div>
+
+    <div class="screen" id="scr-requests">
+      <div class="ph"><h1>Punch list &amp; requests <span class="tag live">REAL ITEMS</span></h1>
+        <div class="sub">A few genuinely open items from the current punch list.</div></div>
+      <div class="mod wgt">
+        <div class="twrap"><table class="t">
+          <tr><th>Item</th><th>Status</th><th>Owner</th></tr>
+          <tr><td>L1 - Per-user login and widget access (this project)</td><td><span class="pill y">DESIGN</span></td><td>Claude + Ryan</td></tr>
+          <tr><td>B13 - Review bonus back catalog before distribution</td><td><span class="pill r">OPEN</span></td><td>Ryan</td></tr>
+          <tr><td>B12 - Distribute instructor page credentials</td><td><span class="pill r">OPEN</span></td><td>Ryan</td></tr>
+          <tr><td>K12 - Dev site cannot send email (Postmark token)</td><td><span class="pill r">OPEN</span></td><td>Ryan / cfmedia</td></tr>
+          <tr><td>J6 - Remote access tool on the office PC</td><td><span class="pill r">OPEN</span></td><td>Ryan</td></tr>
+        </table></div>
+      </div>
+    </div>
+
+    <div class="screen" id="scr-denied">
+      <div class="mod denied">
+        <h2>You do not have access to this page</h2>
+        <p class="mut small">Your account is signed in, but this page is not enabled for it. If you think it should be, ask Ryan.</p>
+        <button class="navb" id="deniedHome">Back to your dashboard</button>
+      </div>
+    </div>
+
+    <div class="screen" id="scr-admin">
+      <div class="ph"><h1>Access admin</h1>
+        <div class="sub">Pick a person, flip toggles, save. Saves publish a new version of this page, so your changes
+          survive reloads and are what you see next time - on any device.</div></div>
+      <div class="admin">
+        <div class="mod ulist"><div class="top"><b>People</b><button class="navb" id="addUser">+ Add user</button></div><div id="ulist"></div></div>
+        <div class="mod detail">
+          <div class="idrow">
+            <div class="fld"><label>Name</label><input id="dn" readonly></div>
+            <div class="fld"><label>Email (demo)</label><input id="de" readonly></div>
+            <div class="fld"><label>Instructor binding</label><select id="db"></select></div>
+            <label class="ckline"><input type="checkbox" id="da"> Dashboard admin</label>
+            <div class="actbtns">
+              <button class="navb" id="btnPreview">Preview as this user</button>
+              <button class="navb" id="btnReset">Reset password</button>
+              <button class="navb" id="btnState">Disable</button>
+            </div>
+          </div>
+          <div class="tpl"><span>Templates</span>
+            <button class="tplb" data-t="owner">Owner - everything</button>
+            <button class="tplb" data-t="cfi">Instructor - invoice only</button>
+            <button class="tplb" data-t="fin">Finance - tax only</button>
+          </div>
+          <div class="twrap">
+          <table class="mx" id="mx">
+            <tr><th style="width:46%">Page / widget</th><th></th><th style="width:44px">On</th></tr>
+            <tr class="page" data-k="rev"><td>Revenue</td><td class="desc">main dashboard</td><td><button class="tg" data-k="rev" aria-label="toggle Revenue"></button></td></tr>
+            <tr class="child" data-p="rev" data-k="rev.mom"><td>Month over month</td><td class="desc">verified monthly table</td><td><button class="tg" data-k="rev.mom" aria-label="toggle month over month"></button></td></tr>
+            <tr class="child" data-p="rev" data-k="rev.category"><td>Revenue by category</td><td class="desc">verified category report</td><td><button class="tg" data-k="rev.category" aria-label="toggle category"></button></td></tr>
+            <tr class="child" data-p="rev" data-k="rev.chart"><td>Monthly chart</td><td class="desc">billed revenue by month</td><td><button class="tg" data-k="rev.chart" aria-label="toggle monthly chart"></button></td></tr>
+            <tr class="page" data-k="auto"><td>Revenue - AUTO</td><td class="desc">auto-refreshed dashboard</td><td><button class="tg" data-k="auto" aria-label="toggle AUTO"></button></td></tr>
+            <tr class="child" data-p="auto" data-k="auto.tax"><td>Aircraft tax widget</td><td class="desc">per-aircraft DOR panel</td><td><button class="tg" data-k="auto.tax" aria-label="toggle AUTO tax"></button></td></tr>
+            <tr class="child" data-p="auto" data-k="auto.payroll"><td>Payroll widget</td><td class="desc">all-instructor pay table</td><td><button class="tg" data-k="auto.payroll" aria-label="toggle AUTO payroll"></button></td></tr>
+            <tr class="child" data-p="auto.payroll" data-k="pay.rates"><td>Payroll: Edit rates</td><td class="desc">rate editor button</td><td><button class="tg" data-k="pay.rates" aria-label="toggle rates"></button></td></tr>
+            <tr class="child" data-p="auto.payroll" data-k="pay.events"><td>Payroll: Checkrides &amp; reviews</td><td class="desc">bonus entry editor</td><td><button class="tg" data-k="pay.events" aria-label="toggle events"></button></td></tr>
+            <tr class="child" data-p="auto.payroll" data-k="pay.pdf"><td>Payroll: PDFs + CSV</td><td class="desc">invoice exports</td><td><button class="tg" data-k="pay.pdf" aria-label="toggle PDFs"></button></td></tr>
+            <tr class="page" data-k="sales"><td>Sales pipeline</td><td class="desc">pipeline, starts, student load</td><td><button class="tg" data-k="sales" aria-label="toggle sales"></button></td></tr>
+            <tr class="child" data-p="sales" data-k="sales.pipeline"><td>Pipeline</td><td class="desc">stage table</td><td><button class="tg" data-k="sales.pipeline" aria-label="toggle pipeline"></button></td></tr>
+            <tr class="child" data-p="sales" data-k="sales.starts"><td>New starts</td><td class="desc">program starts</td><td><button class="tg" data-k="sales.starts" aria-label="toggle new starts"></button></td></tr>
+            <tr class="child" data-p="sales" data-k="sales.studentload"><td>Student load</td><td class="desc">per-instructor load</td><td><button class="tg" data-k="sales.studentload" aria-label="toggle student load"></button></td></tr>
+            <tr class="page" data-k="tax"><td>Sales tax</td><td class="desc">standalone attorney page</td><td><button class="tg" data-k="tax" aria-label="toggle tax"></button></td></tr>
+            <tr class="page" data-k="invoice"><td>Own Instructor Invoice</td><td class="desc">always the bound instructor, never anyone else</td><td><button class="tg" data-k="invoice" aria-label="toggle invoice"></button></td></tr>
+            <tr class="page" data-k="requests"><td>Punch list &amp; requests</td><td class="desc">request board</td><td><button class="tg" data-k="requests" aria-label="toggle requests"></button></td></tr>
+            <tr class="page" data-k="access"><td>Access admin</td><td class="desc">this page - admins only</td><td><button class="tg" data-k="access" aria-label="toggle access admin"></button></td></tr>
+          </table>
+          </div>
+          <div class="savebar">
+            <span class="small mut" id="saveHint">Save publishes a new version of this page with the change baked in.</span>
+            <span style="display:flex;align-items:center;gap:12px">
+              <span class="savedmsg" id="saved">Saved</span>
+              <button class="btn" id="save">Save access</button>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="mod audit">
+        <h3>Audit log</h3>
+        <div class="small mut">Append-only. Nothing here can be deleted.</div>
+        <div id="alog"></div>
+      </div>
+    </div>
+  </div>
+  <div class="ctip" id="ctip"></div>
+</template>
+
+<div id="root"></div>
+
+<script type="application/json" id="state">{"v":1,"savedAt":"2026-08-19T00:00:00Z","users":{},"log":[{"t":"Aug 19, 2026","who":"Claude","txt":"Prototype initialized with default access: Ryan and Ben Gabriel see everything, instructors see their own invoice, Rachael sees the tax page."}]}</script>
+
+<script type="application/json" id="data">{
+"verified":{"subtotal":140696.37,"subtotalUpdated":"Aug 13, 12:30 PM","month":"2026-08","unbilled":2001.28,"ytd":2221017.54,"goal":300000,"verifiedAtISO":"2026-08-13T16:30:56Z",
+"hist":{"2026-01":325423.40,"2026-02":281103.47,"2026-03":312660.67,"2026-04":361644.12,"2026-05":388824.90,"2026-06":380326.22,"2026-07":362861.05},
+"cat":{"Aircraft Rental Revenue":66026.98,"Instruction Revenue":56892.98,"SIM Instruction":5228.55,"Maintenance Revenue":545.85,"Misc. Revenue":150},
+"catExcluded":{"Fuel Surcharge":9903.34,"CC Surcharge":1728.67,"Convenience Fee- ACH":220}},
+"instructors":{
+"ben-barwick":{"name":"Ben Barwick","id":"a0b0f297-9fe6-4877-bb3d-005a2dd46f48"},
+"eric-rohlfing":{"name":"Eric Rohlfing","id":"0ac16c96-d13c-4a09-b966-a0cc136e6bdf"},
+"isabella-murrell":{"name":"Isabella Murrell","id":"8d9399e1-61a2-441a-b595-5299396328aa"},
+"dawson-campbell":{"name":"Dawson Campbell","id":"85bb6455-6b52-4b60-b07a-16f38c166d64"},
+"rian-sexton":{"name":"Rian Sexton","id":"aea0fd70-15f4-4fee-8712-2d59d4752df3"},
+"charlie-ashton":{"name":"Charlie Ashton","id":"48cf69e6-4b27-4dd9-9784-66e6296f485b"},
+"frankie-norton":{"name":"Frankie Norton","id":"b53151ea-c6de-4c82-82ea-61605b48568e"},
+"tyler-caswell":{"name":"Tyler Caswell","id":"f10dd838-c985-4707-a900-8d7c0af5769d"},
+"trevor-money":{"name":"Trevor Money","id":"46dd42e3-8869-4250-ac9b-a40a667acb4c"},
+"matthew-fox":{"name":"Matthew Fox","id":"4c2b753f-252e-4c91-afa5-d0a02411edc2"},
+"nico-bowers":{"name":"Nico Bowers","id":"a9165ebd-9866-415e-af0d-62c7fbaf4e03"},
+"jonathan-rutledge":{"name":"Jonathan Rutledge","id":"f6e8ae55-296a-4eb1-909c-b396d357f34c"},
+"robert-lee":{"name":"Robert Lee","id":"25d0d815-4048-4651-9f4f-3914867dad6e"},
+"kasen-woody":{"name":"Kasen Woody","id":"f5b40249-4583-46e1-8df3-e075ec94b327"},
+"kate-struthers":{"name":"Kate Struthers","id":"605266b6-131c-447e-9858-24e2b3bb1898"},
+"ashley-broadus":{"name":"Ashley Broadus","id":"1094c59f-5ddc-456e-9e2e-8a82b233b5ef"}},
+"rates":{"a0b0f297-9fe6-4877-bb3d-005a2dd46f48":33,"1094c59f-5ddc-456e-9e2e-8a82b233b5ef":30,"85bb6455-6b52-4b60-b07a-16f38c166d64":30,"48cf69e6-4b27-4dd9-9784-66e6296f485b":34,"0ac16c96-d13c-4a09-b966-a0cc136e6bdf":31,"b53151ea-c6de-4c82-82ea-61605b48568e":50,"8d9399e1-61a2-441a-b595-5299396328aa":31,"f6e8ae55-296a-4eb1-909c-b396d357f34c":50,"bc2325c0-b672-43b5-b82d-be4534f65167":30,"f5b40249-4583-46e1-8df3-e075ec94b327":50,"605266b6-131c-447e-9858-24e2b3bb1898":30,"4c2b753f-252e-4c91-afa5-d0a02411edc2":32,"a9165ebd-9866-415e-af0d-62c7fbaf4e03":33,"aea0fd70-15f4-4fee-8712-2d59d4752df3":31,"25d0d815-4048-4651-9f4f-3914867dad6e":50,"46dd42e3-8869-4250-ac9b-a40a667acb4c":32,"f10dd838-c985-4707-a900-8d7c0af5769d":34},
+"locked":{
+"2026-07-P2":{"48cf69e6-4b27-4dd9-9784-66e6296f485b":34,"4c2b753f-252e-4c91-afa5-d0a02411edc2":32,"46dd42e3-8869-4250-ac9b-a40a667acb4c":32,"0ac16c96-d13c-4a09-b966-a0cc136e6bdf":31,"a0b0f297-9fe6-4877-bb3d-005a2dd46f48":33,"1094c59f-5ddc-456e-9e2e-8a82b233b5ef":30,"605266b6-131c-447e-9858-24e2b3bb1898":30,"a9165ebd-9866-415e-af0d-62c7fbaf4e03":33,"8d9399e1-61a2-441a-b595-5299396328aa":31,"b53151ea-c6de-4c82-82ea-61605b48568e":50,"85bb6455-6b52-4b60-b07a-16f38c166d64":30,"aea0fd70-15f4-4fee-8712-2d59d4752df3":31,"f6e8ae55-296a-4eb1-909c-b396d357f34c":50,"25d0d815-4048-4651-9f4f-3914867dad6e":50,"f10dd838-c985-4707-a900-8d7c0af5769d":34},
+"2026-07-P1":{"4c2b753f-252e-4c91-afa5-d0a02411edc2":32,"46dd42e3-8869-4250-ac9b-a40a667acb4c":31,"8d9399e1-61a2-441a-b595-5299396328aa":31,"f10dd838-c985-4707-a900-8d7c0af5769d":34,"a9165ebd-9866-415e-af0d-62c7fbaf4e03":33,"85bb6455-6b52-4b60-b07a-16f38c166d64":30,"605266b6-131c-447e-9858-24e2b3bb1898":30,"25d0d815-4048-4651-9f4f-3914867dad6e":50,"aea0fd70-15f4-4fee-8712-2d59d4752df3":31,"f6e8ae55-296a-4eb1-909c-b396d357f34c":50,"a0b0f297-9fe6-4877-bb3d-005a2dd46f48":33,"48cf69e6-4b27-4dd9-9784-66e6296f485b":33,"b53151ea-c6de-4c82-82ea-61605b48568e":50,"0ac16c96-d13c-4a09-b966-a0cc136e6bdf":30,"1094c59f-5ddc-456e-9e2e-8a82b233b5ef":30},
+"2026-06-P2":{"4c2b753f-252e-4c91-afa5-d0a02411edc2":32,"a0b0f297-9fe6-4877-bb3d-005a2dd46f48":33,"48cf69e6-4b27-4dd9-9784-66e6296f485b":33,"8d9399e1-61a2-441a-b595-5299396328aa":31,"46dd42e3-8869-4250-ac9b-a40a667acb4c":31,"aea0fd70-15f4-4fee-8712-2d59d4752df3":31,"f10dd838-c985-4707-a900-8d7c0af5769d":34,"25d0d815-4048-4651-9f4f-3914867dad6e":50,"0ac16c96-d13c-4a09-b966-a0cc136e6bdf":30,"b53151ea-c6de-4c82-82ea-61605b48568e":50,"a9165ebd-9866-415e-af0d-62c7fbaf4e03":33,"85bb6455-6b52-4b60-b07a-16f38c166d64":30,"f6e8ae55-296a-4eb1-909c-b396d357f34c":46},
+"2026-06-P1":{"4c2b753f-252e-4c91-afa5-d0a02411edc2":32,"a0b0f297-9fe6-4877-bb3d-005a2dd46f48":33,"48cf69e6-4b27-4dd9-9784-66e6296f485b":33,"aea0fd70-15f4-4fee-8712-2d59d4752df3":31,"b53151ea-c6de-4c82-82ea-61605b48568e":50,"46dd42e3-8869-4250-ac9b-a40a667acb4c":31,"a9165ebd-9866-415e-af0d-62c7fbaf4e03":33,"f10dd838-c985-4707-a900-8d7c0af5769d":34,"25d0d815-4048-4651-9f4f-3914867dad6e":50,"f6e8ae55-296a-4eb1-909c-b396d357f34c":46,"0ac16c96-d13c-4a09-b966-a0cc136e6bdf":30,"8d9399e1-61a2-441a-b595-5299396328aa":31,"85bb6455-6b52-4b60-b07a-16f38c166d64":30,"f5b40249-4583-46e1-8df3-e075ec94b327":50},
+"2026-05-P2":{"4c2b753f-252e-4c91-afa5-d0a02411edc2":32,"48cf69e6-4b27-4dd9-9784-66e6296f485b":33,"46dd42e3-8869-4250-ac9b-a40a667acb4c":31,"a0b0f297-9fe6-4877-bb3d-005a2dd46f48":33,"a9165ebd-9866-415e-af0d-62c7fbaf4e03":32,"f10dd838-c985-4707-a900-8d7c0af5769d":32,"25d0d815-4048-4651-9f4f-3914867dad6e":50,"8d9399e1-61a2-441a-b595-5299396328aa":31,"aea0fd70-15f4-4fee-8712-2d59d4752df3":31,"0ac16c96-d13c-4a09-b966-a0cc136e6bdf":30,"f6e8ae55-296a-4eb1-909c-b396d357f34c":46,"85bb6455-6b52-4b60-b07a-16f38c166d64":30,"b53151ea-c6de-4c82-82ea-61605b48568e":50,"f5b40249-4583-46e1-8df3-e075ec94b327":50},
+"2026-05-P1":{"46dd42e3-8869-4250-ac9b-a40a667acb4c":31,"4c2b753f-252e-4c91-afa5-d0a02411edc2":32,"a9165ebd-9866-415e-af0d-62c7fbaf4e03":32,"a0b0f297-9fe6-4877-bb3d-005a2dd46f48":33,"48cf69e6-4b27-4dd9-9784-66e6296f485b":33,"f10dd838-c985-4707-a900-8d7c0af5769d":31,"aea0fd70-15f4-4fee-8712-2d59d4752df3":31,"f6e8ae55-296a-4eb1-909c-b396d357f34c":46,"8d9399e1-61a2-441a-b595-5299396328aa":31,"b53151ea-c6de-4c82-82ea-61605b48568e":46,"25d0d815-4048-4651-9f4f-3914867dad6e":50,"0ac16c96-d13c-4a09-b966-a0cc136e6bdf":30,"85bb6455-6b52-4b60-b07a-16f38c166d64":30}},
+"salaried":{"2db15e41-a8b5-4cd0-9c06-082b054144a5":true},
+"checkrides":{
+"f6e8ae55-296a-4eb1-909c-b396d357f34c":{"2025-11-P1":[["2025-11-05","Travis Goebel","Pvt",100]]},
+"b53151ea-c6de-4c82-82ea-61605b48568e":{"2026-06-P1":[["2026-06-03","Katherine Struthers","CFII",200]],"2026-06-P2":[["2026-06-17","Anne Hughes","CFII",200]],"2026-07-P1":[["2026-07-09","Alex Argevani","CFI",200],["2026-07-14","Alexandria Reynolds","CFI",200]],"2026-07-P2":[["2026-07-22","Shelby Robinson","CFII",200],["2026-07-23","Aaron Nelson","CFI",200],["2026-07-23","Alex Argevani","CFII",200],["2026-07-24","Brenden Meyers","CFI",200]]},
+"a0b0f297-9fe6-4877-bb3d-005a2dd46f48":{"2026-06-P1":[["2026-06-04","Cole Neilson","Com",100],["2026-06-15","Ashley Broadus","MEI",100]],"2026-07-P1":[["2026-07-07","Jonathan Rutledge","ME",100]],"2026-08-P1":[["2026-08-05","Skyler Donaldson","Inst",100]]},
+"a9165ebd-9866-415e-af0d-62c7fbaf4e03":{"2026-06-P1":[["2026-06-12","Carter Karinshak","Inst",100]],"2026-07-P1":[["2026-07-02","Riley O'Brien","Inst",100]]},
+"48cf69e6-4b27-4dd9-9784-66e6296f485b":{"2026-05-P2":[["2026-05-19","Bella Martin","Pvt",100]]},
+"25d0d815-4048-4651-9f4f-3914867dad6e":{"2026-06-P2":[["2026-06-29","Collin King","ME",100]]},
+"4c2b753f-252e-4c91-afa5-d0a02411edc2":{"2026-05-P1":[["2026-05-11","Caleb Lenahan","CFII",200],["2026-05-13","Ben Barwick","ME",100]],"2026-05-P2":[["2026-05-18","Ashley Broadus","ME",100]],"2026-06-P1":[["2026-06-15","Janet Caldwell","MEI",100]],"2026-07-P1":[["2026-07-02","Hayes Dugan","Com",100],["2026-07-11","Jordan Freeman","ME",100]],"2026-07-P2":[["2026-07-16","Landon Horton","ME",100],["2026-07-21","Nico Bowers","ME",100]],"2026-08-P1":[["2026-08-06","Charlie Ashton","ME",100],["2026-08-06","Eric Anderson","ME",100],["2026-08-12","Alex Lisowski","Inst",100]]},
+"f10dd838-c985-4707-a900-8d7c0af5769d":{"2026-07-P1":[["2026-07-03","Stephen Plunkett","Inst",100]]},
+"aea0fd70-15f4-4fee-8712-2d59d4752df3":{"2026-05-P1":[["2026-05-04","Isaac Altenbach","Pvt",100]],"2026-06-P2":[["2026-06-29","Conan Hayton","Pvt",100]]},
+"0ac16c96-d13c-4a09-b966-a0cc136e6bdf":{"2026-06-P1":[["2026-06-01","Alex Argevani","Com",100]]}},
+"reviews":{
+"f6e8ae55-296a-4eb1-909c-b396d357f34c":{"2026-08-P1":[["Josh Grantham","2026-08-05",25]]},
+"46dd42e3-8869-4250-ac9b-a40a667acb4c":{"2026-08-P1":[["D Cheers","2026-08-09",25]]},
+"a0b0f297-9fe6-4877-bb3d-005a2dd46f48":{"2026-08-P1":[["Sara Hanlon","2026-08-12",25]]},
+"8d9399e1-61a2-441a-b595-5299396328aa":{"2026-06-P1":[["Jihan Lauren","~Jun 2026",25]]}},
+"periods":["2026-08-P1","2026-07-P2","2026-07-P1","2026-06-P2","2026-06-P1","2026-05-P2","2026-05-P1"]
+}</script>
+
+<script id="app">
+(function(){
+  var DATA=JSON.parse(document.getElementById('data').textContent);
+  var EMBED=JSON.parse(document.getElementById('state').textContent);
+  var root=document.getElementById('root');
+  root.innerHTML=document.getElementById('tpl').innerHTML;
+  var $=function(id){return document.getElementById(id);};
+
+  var ALLKEYS=['rev','rev.mom','rev.category','rev.chart','auto','auto.tax','auto.payroll',
+    'pay.rates','pay.events','pay.pdf','sales','sales.pipeline','sales.starts','sales.studentload',
+    'tax','invoice','requests','access'];
+  var TPLS={owner:ALLKEYS.slice(),cfi:['invoice'],fin:['tax']};
+  var PAGES=[
+    {k:'rev',t:'Revenue',d:'Verified revenue, month over month, categories.',s:'scr-rev'},
+    {k:'auto',t:'Revenue - AUTO',d:'Auto-refreshed revenue with tax and payroll widgets.',s:'scr-auto'},
+    {k:'sales',t:'Sales pipeline',d:'Pipeline, new starts, student load.',s:'scr-sales'},
+    {k:'tax',t:'Sales tax',d:'FL sales tax by aircraft.',s:'scr-tax'},
+    {k:'invoice',t:'My Instructor Invoice',d:'Your rate, bonuses and invoice.',s:'scr-invoice'},
+    {k:'requests',t:'Punch list & requests',d:'File a request, watch status.',s:'scr-requests'},
+    {k:'access',t:'Access admin',d:'Accounts, widget toggles, audit log.',s:'scr-admin'}
+  ];
+
+  /* ---------- people: fixed identity, mutable access ---------- */
+  function mkEmail(name){var p=name.toLowerCase().split(' ');return p[0][0]+p[p.length-1]+'@flyjaxaero.com';}
+  var PEOPLE={
+    ryan:{n:'Ryan Winter',e:'ryan.winter@flyjaxaero.com',chip:'ADMIN'},
+    beng:{n:'Ben Gabriel',e:'ben@flyjaxaero.com',chip:'ADMIN'},
+    rachael:{n:'Rachael',e:'rachael@flyjaxaero.com',chip:'TAX'}
+  };
+  Object.keys(DATA.instructors).forEach(function(slug){
+    PEOPLE[slug]={n:DATA.instructors[slug].name,e:mkEmail(DATA.instructors[slug].name),chip:'CFI'};
+  });
+  function defAccess(uid){
+    if(uid==='ryan'||uid==='beng')return {g:ALLKEYS.slice(),en:true,a:true,b:'none'};
+    if(uid==='rachael')return {g:['tax'],en:true,a:false,b:'none'};
+    return {g:['invoice'],en:true,a:false,b:uid};
+  }
+
+  /* ---------- state: embedded, optionally overridden by a local save ---------- */
+  var LSKEY='jaxacl_proto_state';
+  var STATE=EMBED;
+  try{
+    var ls=localStorage.getItem(LSKEY);
+    if(ls){var p=JSON.parse(ls);
+      if(p&&p.savedAt&&(!EMBED.savedAt||p.savedAt>EMBED.savedAt))STATE=p;}
+  }catch(e){}
+  function acc(uid){
+    if(!STATE.users[uid])STATE.users[uid]=defAccess(uid);
+    var a=STATE.users[uid];
+    if(!a.g)a.g=[]; if(a.en===undefined)a.en=true; if(!a.b)a.b='none';
+    return a;
+  }
+  Object.keys(PEOPLE).forEach(acc);
+
+  /* ---------- persistence ---------- */
+  function esc(j){return j.replace(/</g,'\\u003c');}
+  function pageSource(stateJson){
+    return '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
+      +'<meta name="viewport" content="width=device-width,initial-scale=1">'
+      +'<title>JAXAERO Access Admin<\/title>'
+      +'<style id="css">'+document.getElementById('css').textContent+'<\/style><\/head><body>'
+      +'<template id="tpl">'+document.getElementById('tpl').innerHTML+'<\/template>'
+      +'<div id="root"><\/div>'
+      +'<script type="application/json" id="state">'+esc(stateJson)+'<\/script>'
+      +'<script type="application/json" id="data">'+document.getElementById('data').textContent+'<\/script>'
+      +'<script id="app">'+document.getElementById('app').textContent+'<\/script>'
+      +'<\/body><\/html>';
+  }
+  var saving=false;
+  function persist(btn,done){
+    if(saving)return; saving=true;
+    STATE.savedAt=new Date().toISOString();
+    if(STATE.log.length>60)STATE.log=STATE.log.slice(0,60);
+    var json=JSON.stringify(STATE);
+    var old=btn?btn.textContent:'';
+    if(btn){btn.disabled=true;btn.textContent='Saving...';}
+    function localOnly(msg){
+      try{localStorage.setItem(LSKEY,json);}catch(e){}
+      note(msg||'Saved on this device only. Open the page from claude.ai to save for everyone.');
+      finish(true);
+    }
+    function finish(ok){
+      saving=false;
+      if(btn){btn.disabled=false;btn.textContent=old;}
+      if(ok){var m=$('saved');if(m){m.classList.add('show');setTimeout(function(){m.classList.remove('show');},1800);}}
+      if(done)done(ok);
+    }
+    var useP=(window.claude&&window.claude.use)?window.claude.use('artifact'):Promise.resolve(null);
+    useP.then(function(art){
+      if(!art||!art.publish){localOnly();return;}
+      art.publish(pageSource(json)).then(function(){
+        try{localStorage.removeItem(LSKEY);}catch(e){}
+        if(btn)btn.textContent='Saved - reloading...';
+        /* the shell reloads every open view to the new version */
+      }).catch(function(err){
+        var c=err&&err.code;
+        if(c==='conflict'){note('Someone else saved first - reloading to the latest version.');saving=false;return;}
+        if(c==='not_writer'||c==='not_granted'||c==='consent_required'){
+          localOnly('This view is read-only, so the save is kept on this device only.');return;}
+        localOnly('Publishing failed ('+(c||'error')+') - saved on this device only for now.');
+      });
+    }).catch(function(){localOnly();});
+  }
+  function note(txt){var n=$('storeNote');n.textContent=txt;n.classList.add('on');
+    setTimeout(function(){n.classList.remove('on');},6000);}
+
+  /* ---------- session (per-viewer, never persisted) ---------- */
+  var sess=null,pv=null,adminSel='ben-barwick';
+  function eff(){return pv||sess;}
+  function grants(uid){return acc(uid).g;}
+  function has(k){var u=eff();return !!u&&grants(u).indexOf(k)>=0;}
+  function show(id){document.querySelectorAll('.screen').forEach(function(s){s.classList.toggle('on',s.id===id);});window.scrollTo(0,0);}
+  function chrome(){
+    var on=!!sess;
+    $('whoBar').hidden=!on;$('navHome').hidden=!on;$('navOut').hidden=!on;
+    $('navAdmin').hidden=!(on&&acc(sess).a&&!pv);
+    if(on)$('whoName').textContent=PEOPLE[sess].n;
+    $('pvBanner').classList.toggle('on',!!pv);
+    if(pv)$('pvName').textContent=PEOPLE[pv].n;
+  }
+  function goHome(){
+    var u=eff();if(!u){show('scr-signin');return;}
+    var mine=PAGES.filter(function(p){return grants(u).indexOf(p.k)>=0;});
+    if(mine.length===1){openPage(mine[0]);return;}
+    var h=new Date().getHours();
+    $('homeHi').textContent=(h<12?'Good morning':(h<17?'Good afternoon':'Good evening'))+', '+PEOPLE[u].n;
+    var c=$('homeCards');c.innerHTML='';
+    mine.forEach(function(p){
+      var el=document.createElement('button');el.className='pcard';
+      el.innerHTML='<h3>'+p.t+'</h3><p>'+p.d+'</p><div class="go">OPEN &rsaquo;</div>';
+      el.addEventListener('click',function(){openPage(p);});
+      c.appendChild(el);
+    });
+    show('scr-home');chrome();
+  }
+  function openPage(p){
+    if(!has(p.k)){show('scr-denied');chrome();return;}
+    if(p.k==='rev')renderRev();
+    if(p.k==='auto')renderAuto();
+    if(p.k==='invoice')renderInvoice();
+    if(p.s==='scr-admin')renderAdmin();
+    document.querySelectorAll('#'+p.s+' .wgt[data-w]').forEach(function(w){w.style.display=has(w.dataset.w)?'':'none';});
+    document.querySelectorAll('#'+p.s+' [data-w2]').forEach(function(b){b.style.display=has(b.dataset.w2)?'':'none';});
+    show(p.s);chrome();
+  }
+  function signIn(u){if(!acc(u).en){$('siErr').classList.add('on');return;}sess=u;pv=null;$('siErr').classList.remove('on');chrome();goHome();}
+  function signOut(){sess=null;pv=null;chrome();show('scr-signin');}
+
+  $('navHome').addEventListener('click',goHome);
+  $('navOut').addEventListener('click',signOut);
+  $('navAdmin').addEventListener('click',function(){openPage(PAGES[6]);});
+  $('deniedHome').addEventListener('click',goHome);
+  $('pvExit').addEventListener('click',function(){pv=null;openPage(PAGES[6]);});
+  document.querySelectorAll('[data-demo]').forEach(function(b){b.addEventListener('click',function(){signIn(b.dataset.demo);});});
+  (function(){
+    var sel=$('asCfi');
+    Object.keys(DATA.instructors).forEach(function(slug){
+      var o=document.createElement('option');o.value=slug;o.textContent=DATA.instructors[slug].name;sel.appendChild(o);
+    });
+    sel.addEventListener('change',function(){if(sel.value)signIn(sel.value);});
+  })();
+  $('siGo').addEventListener('click',function(){
+    var em=$('em').value.trim().toLowerCase(),hit=null;
+    Object.keys(PEOPLE).forEach(function(k){if(PEOPLE[k].e===em)hit=k;});
+    if(hit&&acc(hit).en){signIn(hit);}else{$('siErr').classList.add('on');}
+  });
+  document.querySelectorAll('[data-act]').forEach(function(b){
+    b.addEventListener('click',function(){
+      var a=b.dataset.act;
+      if(a==='rates')alert('The rate editor opens here on the live dashboard. Rates in this prototype are the real Aug 13 values, read-only.');
+      if(a==='events')alert('The checkride and review editor opens here on the live dashboard.');
+      if(a==='pdf')alert('PDF generation runs on the live dashboard. This prototype does not rebuild the invoice PDF.');
+    });
+  });
+
+  /* ---------- money helpers ---------- */
+  function usd(n,c){return '$'+n.toLocaleString('en-US',{minimumFractionDigits:c===undefined?2:c,maximumFractionDigits:c===undefined?2:c});}
+  function rateFor(pid,id){var l=DATA.locked[pid];if(l&&l[id]!==undefined)return l[id];var r=DATA.rates[id];return r===undefined?null:r;}
+  function bonuses(id,pid){
+    var out={ck:[],rv:[],total:0};
+    var c=DATA.checkrides[id];if(c&&c[pid])c[pid].forEach(function(e){out.ck.push(e);out.total+=e[3];});
+    var r=DATA.reviews[id];if(r&&r[pid])r[pid].forEach(function(e){out.rv.push(e);out.total+=e[2];});
+    return out;
+  }
+  function staleTxt(){
+    var days=Math.round((Date.now()-Date.parse(DATA.verified.verifiedAtISO))/86400000);
+    var cls=days<1?'g':(days<2?'y':'r');
+    return '<span class="pill '+cls+'">Verified numbers '+days+' days old</span>';
+  }
+
+  /* ---------- revenue pages ---------- */
+  var MONTHNAMES={'2026-01':'January','2026-02':'February','2026-03':'March','2026-04':'April','2026-05':'May','2026-06':'June','2026-07':'July','2026-08':'August'};
+  function renderRev(){
+    var V=DATA.verified;
+    $('stalePill').innerHTML=staleTxt();
+    $('kEarn').textContent=usd(V.subtotal);
+    $('kUnb').textContent=usd(V.unbilled);
+    $('kGoal').textContent=Math.round(V.subtotal/V.goal*100)+'%';
+    $('kGoalD').textContent='of '+usd(V.goal,0)+' goal, day 13';
+    $('kYtd').textContent=usd(V.ytd,0);
+    var keys=Object.keys(V.hist);
+    var h='<tr><th>Month</th><th class="n">Billed</th><th class="n">vs prior</th></tr>',prev=null;
+    keys.forEach(function(k){
+      var v=V.hist[k],d=prev?((v-prev)/prev*100):null;
+      h+='<tr><td>'+MONTHNAMES[k]+'</td><td class="n">'+usd(v)+'</td><td class="n">'+(d===null?'&mdash;':(d>=0?'+':'')+d.toFixed(1)+'%')+'</td></tr>';
+      prev=v;
+    });
+    h+='<tr><td>August (through Aug 13)</td><td class="n">'+usd(V.subtotal)+'</td><td class="n">&mdash;</td></tr>';
+    $('momT').innerHTML=h;
+    var tot=0;Object.keys(V.cat).forEach(function(k){tot+=V.cat[k];});
+    var c='<tr><th>Category</th><th class="n">Aug 1-13</th><th class="n">Share</th></tr>';
+    Object.keys(V.cat).sort(function(a,b){return V.cat[b]-V.cat[a];}).forEach(function(k){
+      c+='<tr><td>'+k+'</td><td class="n">'+usd(V.cat[k])+'</td><td class="n">'+(V.cat[k]/tot*100).toFixed(0)+'%</td></tr>';
+    });
+    c+='<tr class="ft"><td>Revenue total</td><td class="n">'+usd(tot)+'</td><td class="n"></td></tr>';
+    Object.keys(V.catExcluded).forEach(function(k){
+      c+='<tr><td class="mut">'+k+' (not revenue)</td><td class="n mut">'+usd(V.catExcluded[k])+'</td><td class="n"></td></tr>';
+    });
+    $('catT').innerHTML=c;
+    renderChart();
+  }
+  function renderAuto(){
+    var V=DATA.verified;
+    $('stalePill2').innerHTML=staleTxt();
+    $('kEarn2').textContent=usd(V.subtotal);
+    $('kUnb2').textContent=usd(V.unbilled);
+    $('kGoal2').textContent=Math.round(V.subtotal/V.goal*100)+'%';
+    $('kGoalD2').textContent='of '+usd(V.goal,0);
+    renderPayroll();
+  }
+  var chartDone=false;
+  function renderChart(){
+    if(chartDone)return;chartDone=true;
+    var V=DATA.verified,chart=$('mchart'),xrow=$('mchartx'),tip=$('ctip');
+    var keys=Object.keys(V.hist).concat(['2026-08']);
+    var vals=keys.map(function(k){return k==='2026-08'?V.subtotal:V.hist[k];});
+    var max=Math.max.apply(null,vals);
+    [200000,300000].forEach(function(g){
+      var gl=document.createElement('div');gl.className='gline';gl.style.bottom=(g/max*100)+'%';
+      gl.innerHTML='<i>$'+(g/1000)+'k</i>';chart.appendChild(gl);
+    });
+    keys.forEach(function(k,i){
+      var v=vals[i],b=document.createElement('div');b.className='cb';b.style.height=(v/max*100)+'%';
+      if(v===max){var l=document.createElement('span');l.className='lab';l.textContent='$'+Math.round(v/1000)+'k';b.appendChild(l);}
+      if(k==='2026-08')b.style.opacity='.55';
+      b.addEventListener('mousemove',function(ev){
+        tip.style.display='block';
+        tip.textContent=MONTHNAMES[k]+(k==='2026-08'?' (partial)':'')+' - '+usd(v);
+        tip.style.left=(ev.clientX+12)+'px';tip.style.top=(ev.clientY-30)+'px';
+      });
+      b.addEventListener('mouseleave',function(){tip.style.display='none';});
+      chart.appendChild(b);
+      var x=document.createElement('span');x.textContent=MONTHNAMES[k].slice(0,3);xrow.appendChild(x);
+    });
+  }
+  function renderPayroll(){
+    var pid=$('ppSel').value||'2026-08-P1';
+    var h='<tr><th>Instructor</th><th class="n">Instruction hrs</th><th class="n">Rate</th><th class="n">Checkride bonus</th><th class="n">Review bonus</th><th class="n">Net pay</th></tr>';
+    var tck=0,trv=0;
+    Object.keys(DATA.instructors).sort(function(a,b){return DATA.instructors[a].name<DATA.instructors[b].name?-1:1;}).forEach(function(slug){
+      var it=DATA.instructors[slug],r=rateFor(pid,it.id),b=bonuses(it.id,pid);
+      var ck=0,rv=0;b.ck.forEach(function(e){ck+=e[3];});b.rv.forEach(function(e){rv+=e[2];});
+      tck+=ck;trv+=rv;
+      h+='<tr><td>'+it.name+'</td><td class="n mut">&mdash;</td><td class="n">'+(r===null?'not set':usd(r,0))+'</td>'
+        +'<td class="n">'+(ck?usd(ck,0):'&mdash;')+'</td><td class="n">'+(rv?usd(rv,0):'&mdash;')+'</td><td class="n mut">&mdash;</td></tr>';
+    });
+    h+='<tr class="ft"><td>Total</td><td class="n"></td><td class="n"></td><td class="n">'+(tck?usd(tck,0):'&mdash;')+'</td><td class="n">'+(trv?usd(trv,0):'&mdash;')+'</td><td class="n"></td></tr>';
+    $('payT').innerHTML=h;
+  }
+  (function(){
+    var sel=$('ppSel');
+    DATA.periods.forEach(function(p){var o=document.createElement('option');o.value=p;o.textContent=p;sel.appendChild(o);});
+    sel.addEventListener('change',renderPayroll);
+    var sel2=$('invPp');
+    DATA.periods.forEach(function(p){var o=document.createElement('option');o.value=p;o.textContent=p;sel2.appendChild(o);});
+    sel2.addEventListener('change',renderInvoice);
+  })();
+  function renderInvoice(){
+    var u=eff();if(!u)return;
+    var slug=acc(u).b;
+    var pid=$('invPp').value||'2026-08-P1';
+    if(slug==='none'||!DATA.instructors[slug]){
+      $('invName').textContent='Instructor Invoice - no instructor bound to this account';
+      $('invRate').textContent='-';$('invRateD').textContent='';
+      $('invBon').textContent='-';$('invBonD').textContent='';
+      $('invT').innerHTML='<tr><td class="mut">Bind an instructor to this account in Access admin to see an invoice.</td></tr>';
+      return;
+    }
+    var it=DATA.instructors[slug],r=rateFor(pid,it.id),b=bonuses(it.id,pid);
+    $('invName').innerHTML='Instructor Invoice - '+it.name+' <span class="tag live">REAL RECORDS</span>';
+    $('invRate').textContent=r===null?'not set':usd(r,0)+'/hr';
+    $('invRateD').textContent=DATA.locked[pid]?'locked for '+pid:'live rate';
+    $('invBon').textContent=b.total?usd(b.total,0):'$0';
+    $('invBonD').textContent=b.ck.length+' checkride, '+b.rv.length+' review';
+    var h='<tr><th>Date</th><th>Type</th><th>Detail</th><th class="n">Amount</th></tr>';
+    b.ck.forEach(function(e){h+='<tr><td>'+e[0]+'</td><td>Checkride pass</td><td>'+e[1]+' - '+e[2]+'</td><td class="n">'+usd(e[3],0)+'</td></tr>';});
+    b.rv.forEach(function(e){h+='<tr><td>'+e[1]+'</td><td>Google review</td><td>Named by '+e[0]+'</td><td class="n">'+usd(e[2],0)+'</td></tr>';});
+    if(!b.ck.length&&!b.rv.length)h+='<tr><td colspan="4" class="mut">No bonus entries this period.</td></tr>';
+    else h+='<tr class="ft"><td colspan="3">Bonus total</td><td class="n">'+usd(b.total,0)+'</td></tr>';
+    $('invT').innerHTML=h;
+  }
+
+  /* ---------- admin ---------- */
+  function renderUlist(){
+    var box=$('ulist');box.innerHTML='';
+    var order=['ryan','beng'].concat(Object.keys(DATA.instructors).sort(function(a,b){
+      return DATA.instructors[a].name<DATA.instructors[b].name?-1:1;})).concat(['rachael']);
+    order.forEach(function(k,i){
+      if(i===2){var dv=document.createElement('div');dv.className='divide';box.appendChild(dv);}
+      var p=PEOPLE[k],a=acc(k);
+      var r=document.createElement('button');r.className='urow'+(k===adminSel?' on':'');
+      r.innerHTML='<span class="dot '+(a.en?'a':'d')+'"></span><span><span class="nm">'+p.n+'</span>'
+        +'<span class="um">'+(a.b!=='none'?'Instructor - '+a.b:p.e)+(a.en?'':' - disabled')+'</span></span>'
+        +'<span class="chip'+(a.a?' adm':'')+'">'+(a.en?(a.a?'ADMIN':p.chip):'OFF')+'</span>';
+      r.addEventListener('click',function(){adminSel=k;renderAdmin();});
+      box.appendChild(r);
+    });
+  }
+  function setToggles(keys){
+    document.querySelectorAll('#mx .tg').forEach(function(t){t.classList.toggle('on',keys.indexOf(t.dataset.k)>=0);});
+    dim();
+  }
+  function dim(){
+    document.querySelectorAll('#mx tr.child').forEach(function(r){
+      var p=document.querySelector('#mx .tg[data-k="'+r.dataset.p+'"]');
+      r.classList.toggle('dim',!(p&&p.classList.contains('on')));
+    });
+  }
+  function renderAdmin(){
+    renderUlist();
+    var p=PEOPLE[adminSel],a=acc(adminSel);
+    $('dn').value=p.n;$('de').value=p.e;
+    var db=$('db');db.innerHTML='<option value="none">none</option>';
+    Object.keys(DATA.instructors).forEach(function(slug){
+      var o=document.createElement('option');o.value=slug;o.textContent=slug;db.appendChild(o);
+    });
+    db.value=a.b;
+    $('da').checked=!!a.a;
+    $('btnState').textContent=a.en?'Disable':'Enable';
+    setToggles(a.g);
+    renderLog();
+  }
+  function renderLog(){
+    var box=$('alog');box.innerHTML='';
+    STATE.log.forEach(function(e){
+      var row=document.createElement('div');row.className='arow';
+      var t=document.createElement('time');t.textContent=e.t;
+      var s=document.createElement('span');s.innerHTML=e.txt.indexOf('<b>')>=0?e.txt:('<b>'+e.who+'</b> '+e.txt);
+      row.appendChild(t);row.appendChild(s);box.appendChild(row);
+    });
+  }
+  function stamp(){return new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
+  function logAdd(txt){STATE.log.unshift({t:stamp(),who:PEOPLE[sess].n,txt:txt});}
+  document.querySelectorAll('#mx .tg').forEach(function(t){
+    t.addEventListener('click',function(){t.classList.toggle('on');dim();});
+  });
+  document.querySelectorAll('.tplb').forEach(function(b){
+    b.addEventListener('click',function(){setToggles(TPLS[b.dataset.t].slice());});
+  });
+  $('save').addEventListener('click',function(){
+    var on=[];document.querySelectorAll('#mx .tg.on').forEach(function(t){on.push(t.dataset.k);});
+    var a=acc(adminSel),p=PEOPLE[adminSel];
+    var added=on.filter(function(k){return a.g.indexOf(k)<0;});
+    var removed=a.g.filter(function(k){return on.indexOf(k)<0;});
+    if(adminSel===sess&&$('da').checked===false&&a.a){alert('You cannot remove your own admin flag. A second admin can.');$('da').checked=true;return;}
+    a.g=on;a.b=$('db').value;a.a=$('da').checked;
+    logAdd('saved '+p.n+'. Gave: '+(added.join(', ')||'none')+'. Removed: '+(removed.join(', ')||'none')+'.');
+    renderUlist();renderLog();
+    persist($('save'));
+  });
+  $('btnState').addEventListener('click',function(){
+    var a=acc(adminSel),p=PEOPLE[adminSel];
+    if(adminSel===sess){alert('You cannot disable your own account. A second admin can.');return;}
+    a.en=!a.en;
+    logAdd((a.en?'enabled ':'disabled ')+p.n+'.');
+    renderAdmin();
+    persist($('btnState'));
+  });
+  $('btnReset').addEventListener('click',function(){
+    var p=PEOPLE[adminSel];
+    alert('Temporary password for '+p.n+':\n\n  kite-DELTA-7wq4-runway\n\nShown once. Hand it over out of band - the site cannot email it (K12). A new password is forced at first sign-in.');
+    logAdd('reset the password for '+p.n+'. Temporary password shown once.');
+    renderLog();
+    persist(null);
+  });
+  $('btnPreview').addEventListener('click',function(){
+    if(!acc(adminSel).en){alert('This account is disabled. Enable it to preview.');return;}
+    pv=adminSel;chrome();goHome();
+  });
+  $('addUser').addEventListener('click',function(){
+    alert('In the real build: name + email + optional instructor binding + template. The server generates a temporary password and shows it once. This prototype keeps the roster to the real 16 CFIs plus Ryan, Ben and Rachael.');
+  });
+
+  chrome();
+})();
+</script>
