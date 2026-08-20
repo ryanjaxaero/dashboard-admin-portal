@@ -380,6 +380,7 @@ function jaxauth_rest_ai_key(WP_REST_Request $req) {
       'That does not look like an Anthropic API key (they start with sk-ant-).', ['status' => 400]);
   }
   update_option('jaxaero_anthropic_key', $key, false);
+  update_option('jaxaero_anthropic_key_at', wp_date('M j, g:i A'), false);
   jaxauth_log_add('Anthropic API key updated (ends ' . substr($key, -4) . ').');
   return ['ok' => true, 'ends' => substr($key, -4)];
 }
@@ -638,6 +639,8 @@ function jaxauth_admin_html() {
   $log = array_slice($log, 0, 40);
   $aiKey = (string) get_option('jaxaero_anthropic_key', '');
   $aiSet = $aiKey !== '' ? ('Set - ends ' . substr($aiKey, -4)) : 'Not set';
+  $aiAt = (string) get_option('jaxaero_anthropic_key_at', '');
+  $aiNote = $aiKey !== '' ? ('An Anthropic API key has been added (ends ' . substr($aiKey, -4) . ($aiAt !== '' ? ', saved ' . $aiAt : '') . ').') : '';
   ob_start(); ?>
 <?php echo jaxauth_frame_head(); ?>
 <div class="wrap">
@@ -673,6 +676,7 @@ function jaxauth_admin_html() {
       <input type="password" id="aikey" placeholder="sk-ant-..." autocomplete="off" style="flex:1;min-width:220px;font:inherit;padding:8px 10px;border:1px solid #d9dee7;border-radius:8px">
       <button class="btn" id="aisave" style="font-size:13px">Save key</button>
     </div>
+    <div id="ainote" class="small" style="margin-top:8px;font-weight:700;color:#1E7C46;<?php echo $aiNote === '' ? 'display:none' : ''; ?>"><?php echo esc_html($aiNote); ?></div>
   </div>
   <div class="mod">
     <b>Audit log</b>
@@ -702,7 +706,7 @@ function jaxauth_admin_html() {
     var v=document.getElementById('aikey').value.trim();
     if(!v){fail('Paste the key first.');return;}
     api('admin/ai-key',{key:v}).then(function(r){
-      if(r.s===200&&r.j&&r.j.ok){document.getElementById('aikey').value='';document.getElementById('aist').textContent='Set - ends '+r.j.ends;okFlash();}
+      if(r.s===200&&r.j&&r.j.ok){document.getElementById('aikey').value='';document.getElementById('aist').textContent='Set - ends '+r.j.ends;var nt=document.getElementById('ainote');if(nt){nt.style.display='block';nt.textContent='An Anthropic API key has been added (ends '+r.j.ends+', saved just now).';}okFlash();}
       else{fail((r.j&&r.j.message)?r.j.message:'Could not save the key.');}
     });
   });}
