@@ -426,9 +426,13 @@ function jaxauth_rest_reset_pw(WP_REST_Request $req) {
 
 /* body.scrollHeight, never documentElement (the K10 ratchet lesson). */
 function jaxauth_iframe($html, $fid, $title) {
+  /* No scrolling="no"/overflow:hidden: if the parent resize listener is ever
+     delayed or killed (WP Rocket delay-JS), the frame scrolls internally
+     instead of hard-clipping the buttons below the fold. When the listener
+     runs, the height is exact and no scrollbar shows. */
   return '<div style="display:block;width:100%;margin:0;padding:0;line-height:0">'
-    . '<iframe id="' . esc_attr($fid) . '" srcdoc="' . esc_attr($html) . '" scrolling="no" '
-    . 'style="display:block;width:100%;height:560px;border:0;margin:0;overflow:hidden" '
+    . '<iframe id="' . esc_attr($fid) . '" srcdoc="' . esc_attr($html) . '" '
+    . 'style="display:block;width:100%;height:1100px;border:0;margin:0;overflow:auto" '
     . 'title="' . esc_attr($title) . '"></iframe></div>'
     . '<script>(function(){var f=document.getElementById("' . esc_js($fid) . '");var last=0;window.addEventListener("message",function(e){var d=e.data;if(d&&d.jaxauthH&&Math.abs(d.jaxauthH-last)>2){last=d.jaxauthH;f.style.height=(d.jaxauthH+24)+"px";}});})();</script>';
 }
