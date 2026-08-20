@@ -292,6 +292,11 @@ add_action('rest_api_init', function () {
     'permission_callback' => 'jaxauth_is_admin',
     'callback' => 'jaxauth_rest_reset_pw',
   ]);
+  register_rest_route('jaxauth/v1', '/admin/ai-key', [
+    'methods' => 'POST',
+    'permission_callback' => 'jaxauth_is_admin',
+    'callback' => 'jaxauth_rest_ai_key',
+  ]);
 });
 
 function jaxauth_generic_fail() {
@@ -366,6 +371,17 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
     . '. Removed: ' . ($removed !== '' ? $removed : 'none')
     . ($disabled === '1' ? '. Account disabled.' : '.'));
   return ['ok' => true];
+}
+
+function jaxauth_rest_ai_key(WP_REST_Request $req) {
+  $key = trim((string) $req->get_param('key'));
+  if ($key === '' || !preg_match('/^sk-ant-[A-Za-z0-9_\-]{20,}$/', $key)) {
+    return new WP_Error('jaxauth_badkey',
+      'That does not look like an Anthropic API key (they start with sk-ant-).', ['status' => 400]);
+  }
+  update_option('jaxaero_anthropic_key', $key, false);
+  jaxauth_log_add('Anthropic API key updated (ends ' . substr($key, -4) . ').');
+  return ['ok' => true, 'ends' => substr($key, -4)];
 }
 
 function jaxauth_rest_create_user(WP_REST_Request $req) {
@@ -616,6 +632,8 @@ function jaxauth_admin_html() {
   $log = get_option('jaxauth_log', []);
   if (!is_array($log)) { $log = []; }
   $log = array_slice($log, 0, 40);
+  $aiKey = (string) get_option('jaxaero_anthropic_key', '');
+  $aiSet = $aiKey !== '' ? ('Set - ends ' . substr($aiKey, -4)) : 'Not set';
   ob_start(); ?>
 <?php echo jaxauth_frame_head(); ?>
 <div class="wrap">
@@ -645,6 +663,14 @@ function jaxauth_admin_html() {
     </div>
   </div>
   <div class="mod">
+    <b>AI document intake</b>
+    <div class="small" style="margin-bottom:8px">Anthropic API key for the invoice-reading feature. Stored server-side only and never displayed again after saving. Status: <span id="aist"><?php echo esc_html($aiSet); ?></span></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <input type="password" id="aikey" placeholder="sk-ant-..." autocomplete="off" style="flex:1;min-width:220px;font:inherit;padding:8px 10px;border:1px solid #d9dee7;border-radius:8px">
+      <button class="btn" id="aisave" style="font-size:13px">Save key</button>
+    </div>
+  </div>
+  <div class="mod">
     <b>Audit log</b>
     <div class="small" style="margin-bottom:6px">Append-only. Nothing here can be deleted.</div>
     <div id="alog"></div>
@@ -666,6 +692,16 @@ function jaxauth_admin_html() {
   }
   function fail(m){aerr.textContent=m;aerr.classList.add('on');}
   function okFlash(){aok.classList.add('on');setTimeout(function(){aok.classList.remove('on');},1800);}
+  var aisaveBtn=document.getElementById('aisave');
+  if(aisaveBtn){aisaveBtn.addEventListener('click',function(){
+    aerr.classList.remove('on');
+    var v=document.getElementById('aikey').value.trim();
+    if(!v){fail('Paste the key first.');return;}
+    api('admin/ai-key',{key:v}).then(function(r){
+      if(r.s===200&&r.j&&r.j.ok){document.getElementById('aikey').value='';document.getElementById('aist').textContent='Set - ends '+r.j.ends;okFlash();}
+      else{fail((r.j&&r.j.message)?r.j.message:'Could not save the key.');}
+    });
+  });}
   function cur(){for(var i=0;i<USERS.length;i++){if(USERS[i].id===sel){return USERS[i];}}return null;}
   function esc(s){var d=document.createElement('span');d.textContent=String(s);return d.innerHTML;}
   function renderUsers(){
