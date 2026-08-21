@@ -85,6 +85,7 @@ function jaxauth_registry() {
     'sales'     => ['Sales pipeline', 'revenue + pipeline dashboard'],
     'tax'       => ['Sales tax', 'aircraft sales tax page'],
     'requests'  => ['Punch list', 'current tasks'],
+    'docs'      => ['Documents', 'archive & search'],
     'expense'   => ['Add expenses', 'enter expenses on the owner P/L'],
     'invoice'   => ['Own Instructor Invoice', 'only the bound instructor'],
     'access'    => ['Access admin', 'this admin panel'],
@@ -99,6 +100,7 @@ function jaxauth_shortcode_map() {
     'jaxaero_revenue_sales'  => 'sales',
     'jaxaero_tax'            => 'tax',
     'jaxaero_requests'       => 'requests',
+    'jaxaero_documents'      => 'docs',
     'jaxaero_instructor_pay' => 'invoice',
   ];
 }
