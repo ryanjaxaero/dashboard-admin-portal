@@ -171,6 +171,18 @@ add_action('after_setup_theme', function () {
     show_admin_bar(false);
   }
 });
+/* Nobody - admins included - gets the admin toolbar ON dashboard pages; it
+   stacked on top of the widgets on mobile and desktop. A dashboard page is any
+   page whose content carries one of our [jax...] shortcodes. Everywhere else
+   admins keep the bar. */
+add_action('wp', function () {
+  if (is_admin() || !is_singular()) { return; }
+  $p = get_post();
+  if ($p && strpos((string) $p->post_content, '[jax') !== false) {
+    show_admin_bar(false);
+  }
+});
+
 add_action('admin_init', function () {
   $u = wp_get_current_user();
   if ($u && $u->exists() && jaxauth_is_managed($u) && !jaxauth_is_admin($u) && !user_can($u, 'edit_posts') && !wp_doing_ajax()) {
