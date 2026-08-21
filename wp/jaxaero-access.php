@@ -79,13 +79,12 @@ if (!defined('JAXAUTH_LOCK_SECS')) { define('JAXAUTH_LOCK_SECS', 900); }
 
 function jaxauth_registry() {
   return [
-    'rev'       => ['Revenue', 'main revenue dashboard'],
     'auto'      => ['Revenue - AUTO', 'auto-refreshed dashboard'],
     'pay'       => ['Payroll widget', 'all-instructor pay table'],
     'pay.rates' => ['Rate editor', 'instructor pay rates page'],
     'sales'     => ['Sales pipeline', 'revenue + pipeline dashboard'],
     'tax'       => ['Sales tax', 'aircraft sales tax page'],
-    'requests'  => ['Punch list & requests', 'request board'],
+    'requests'  => ['Punch list', 'current tasks'],
     'expense'   => ['Add expenses', 'enter expenses on the owner P/L'],
     'invoice'   => ['Own Instructor Invoice', 'only the bound instructor'],
     'access'    => ['Access admin', 'this admin panel'],
@@ -94,7 +93,6 @@ function jaxauth_registry() {
 
 function jaxauth_shortcode_map() {
   return [
-    'jaxaero_revenue'        => 'rev',
     'jaxaero_revenue_auto'   => 'auto',
     'jaxaero_payroll'        => 'pay',
     'jaxaero_rate_editor'    => 'pay.rates',
@@ -221,6 +219,13 @@ function jaxauth_denied_html() {
 add_filter('post_password_required', function ($required, $post) {
   if (!$required || !$post) { return $required; }
   $u = wp_get_current_user();
+  /* dashboard admins skip the page password on every MAPPED page - some mapped
+     pages (the punch list) carry a random password nobody knows, portal-only */
+  if ($u && $u->exists() && jaxauth_is_admin($u)) {
+    $adminPages = get_option('jaxauth_pages', []);
+    if (is_array($adminPages) && isset($adminPages[$post->ID])) { return false; }
+    return $required;
+  }
   if (!$u || !$u->exists() || !jaxauth_is_managed($u)) { return $required; }
   $pages = get_option('jaxauth_pages', []);
   if (!is_array($pages) || !isset($pages[$post->ID])) { return $required; }
@@ -436,7 +441,7 @@ function jaxauth_iframe($html, $fid, $title) {
     . '<iframe id="' . esc_attr($fid) . '" srcdoc="' . esc_attr($html) . '" '
     . 'style="display:block;width:100%;height:1100px;border:0;margin:0;overflow:auto" '
     . 'title="' . esc_attr($title) . '"></iframe></div>'
-    . '<script>(function(){var f=document.getElementById("' . esc_js($fid) . '");var last=0;window.addEventListener("message",function(e){var d=e.data;if(d&&d.jaxauthH&&Math.abs(d.jaxauthH-last)>2){last=d.jaxauthH;f.style.height=(d.jaxauthH+24)+"px";}});})();</script>';
+    . '<script>(function(){var f=document.getElementById("' . esc_js($fid) . '");var last=0;window.addEventListener("message",function(e){var d=e.data;if(d&&d.jaxauthH&&Math.abs(d.jaxauthH-last)>2){last=d.jaxauthH;var fl=0;try{fl=window.innerHeight-f.getBoundingClientRect().top-(window.pageYOffset||0)*0;fl=window.innerHeight-f.getBoundingClientRect().top;}catch(e2){}f.style.height=Math.max(d.jaxauthH+24,fl)+"px";}});})();</script>';
 }
 
 function jaxauth_frame_head() {
@@ -485,7 +490,7 @@ function jaxauth_frame_head() {
 }
 
 function jaxauth_frame_foot() {
-  return '<script>(function(){var l=0;function h(){var v=document.body.scrollHeight;if(Math.abs(v-l)>2){l=v;if(window.parent!==window){window.parent.postMessage({jaxauthH:v},"*");}}}h();setInterval(h,700);})();</script></body></html>';
+  return '<script>(function(){var l=0;function h(){var v=document.body.scrollHeight;var t=v;try{var fe=window.frameElement;if(fe){var pIH=(window.parent&&window.parent.innerHeight)||0;var top=fe.getBoundingClientRect().top+((window.parent&&window.parent.pageYOffset)||0);t=Math.max(v+24,pIH-Math.max(0,top));if(Math.abs(fe.getBoundingClientRect().height-t)>8){fe.style.height=t+"px";}}}catch(e){}if(Math.abs(v-l)>2){l=v;if(window.parent!==window){window.parent.postMessage({jaxauthH:v},"*");}}}h();setInterval(h,700);})();</script></body></html>';
 }
 
 /* -------------------- [jaxaero_login] -------------------- */
