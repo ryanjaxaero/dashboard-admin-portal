@@ -185,6 +185,14 @@ add_action('wp', function () {
   }
 });
 
+add_filter('login_redirect', function ($to, $requested, $user) {
+  if ($user instanceof WP_User && jaxauth_is_managed($user) && !jaxauth_is_admin($user) && !user_can($user, 'edit_posts')) {
+    $p = get_option('jaxauth_signin_page');
+    return $p ? get_permalink($p) : home_url('/');
+  }
+  return $to;
+}, 10, 3);
+
 add_action('admin_init', function () {
   $u = wp_get_current_user();
   if ($u && $u->exists() && jaxauth_is_managed($u) && !jaxauth_is_admin($u) && !user_can($u, 'edit_posts') && !wp_doing_ajax()) {
@@ -535,7 +543,7 @@ function jaxauth_login_html() {
       <input id="pw" type="password" autocomplete="current-password"></div>
     <button class="btn red" id="go" style="width:100%">Sign in</button>
   </div>
-  <p class="small" style="text-align:center;line-height:1.55">Forgot your password? Contact Ryan for a new temporary one.<br>Five failed attempts locks sign-in for 15 minutes.<br>This page never asks for a Flight Schedule Pro login.</p>
+  <p class="small" style="text-align:center;line-height:1.55">Forgot your password? <a href="<?= esc_url(wp_lostpassword_url()) ?>" target="_top" style="color:#1F2F54;font-weight:700">Reset it by email</a>.<br>Five failed attempts locks sign-in for 15 minutes.<br>This page never asks for a Flight Schedule Pro login.</p>
 </div>
 <script>
 (function(){
