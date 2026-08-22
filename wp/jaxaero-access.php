@@ -87,6 +87,7 @@ function jaxauth_registry() {
     'requests'  => ['Punch list', 'current tasks'],
     'docs'      => ['Documents', 'archive & search'],
     'expense'   => ['Add expenses', 'enter expenses on the owner P/L'],
+    'owner'     => ['My Aircraft', 'your aircraft statements (owners)'],
     'invoice'   => ['Own Instructor Invoice', 'only the bound instructor'],
     'access'    => ['Access admin', 'this admin panel'],
   ];
@@ -102,6 +103,7 @@ function jaxauth_shortcode_map() {
     'jaxaero_requests'       => 'requests',
     'jaxaero_documents'      => 'docs',
     'jaxaero_instructor_pay' => 'invoice',
+    'jaxaero_owner_portal'   => 'owner',
   ];
 }
 
@@ -387,6 +389,16 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
   if ($uid === $me && $disabled === '1') {
     return new WP_Error('jaxauth_self', 'You cannot disable your own account.', ['status' => 400]);
   }
+  /* per-owner aircraft assignment drives the read-only owner widget and the
+     'owner' card: any assigned tail grants 'owner', none removes it */
+  $acd = get_option('jaxac_data_last', array());
+  $validTails = (is_array($acd) && !empty($acd['fleet']) && is_array($acd['fleet']))
+    ? array_keys($acd['fleet']) : array('N768SP', 'N146F', 'N1196M', 'N234ZG', 'N9711S');
+  $ac = $req->get_param('aircraft');
+  $ac = is_array($ac) ? array_values(array_intersect(array_map('sanitize_text_field', $ac), $validTails)) : array();
+  update_user_meta($uid, 'jaxown_aircraft', $ac);
+  $grants = array_values(array_diff($grants, array('owner')));
+  if ($ac) { $grants[] = 'owner'; }
   $old = jaxauth_grants($uid);
   update_user_meta($uid, 'jaxauth_grants', $grants);
   update_user_meta($uid, 'jaxauth_instructor', $inst);
@@ -397,7 +409,8 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
   jaxauth_log_add('saved ' . $user->display_name
     . '. Gave: ' . ($added !== '' ? $added : 'none')
     . '. Removed: ' . ($removed !== '' ? $removed : 'none')
-    . ($disabled === '1' ? '. Account disabled.' : '.'));
+    . ($disabled === '1' ? '. Account disabled.' : '.')
+    . ' Aircraft: ' . ($ac ? implode('/', $ac) : 'none') . '.');
   return ['ok' => true];
 }
 
@@ -659,8 +672,12 @@ function jaxauth_admin_html() {
       'g' => jaxauth_grants($wu->ID),
       'b' => (string) get_user_meta($wu->ID, 'jaxauth_instructor', true),
       'd' => !jaxauth_enabled($wu->ID),
+      'ac' => array_values((array) get_user_meta($wu->ID, 'jaxown_aircraft', true)),
     ];
   }
+  $acd0 = get_option('jaxac_data_last', array());
+  $acTails = (is_array($acd0) && !empty($acd0['fleet']) && is_array($acd0['fleet']))
+    ? array_keys($acd0['fleet']) : array('N768SP', 'N146F', 'N1196M', 'N234ZG', 'N9711S');
   $slugs = array_keys((array) get_option('jaxpay_instructors', []));
   $log = get_option('jaxauth_log', []);
   if (!is_array($log)) { $log = []; }
@@ -718,6 +735,7 @@ function jaxauth_admin_html() {
   var REG=<?php echo wp_json_encode($reg); ?>;
   var USERS=<?php echo wp_json_encode($users); ?>;
   var SLUGS=<?php echo wp_json_encode($slugs); ?>;
+  var ACTAILS=<?php echo wp_json_encode($acTails); ?>;
   var LOG=<?php echo wp_json_encode($log); ?>;
   var sel=USERS.length?USERS[0].id:0;
   var aerr=document.getElementById('aerr'),aok=document.getElementById('aok');
@@ -763,9 +781,20 @@ function jaxauth_admin_html() {
     var mx=document.getElementById('mx');
     mx.innerHTML='<tr><th>Widget</th><th></th><th style="width:48px">On</th></tr>';
     Object.keys(REG).forEach(function(k){
+      if(k==='owner'){return;}
       var tr=document.createElement('tr');
       tr.innerHTML='<td><b>'+esc(REG[k][0])+'</b></td><td class="small">'+esc(REG[k][1])+'</td>'
         +'<td><button class="tg'+(u.g.indexOf(k)>=0?' on':'')+'" data-k="'+esc(k)+'" aria-label="toggle '+esc(REG[k][0])+'"></button></td>';
+      mx.appendChild(tr);
+    });
+    var achdr=document.createElement('tr');
+    achdr.innerHTML='<th colspan="3" style="text-align:left;padding-top:12px;border-top:1px solid #e6e9ef">Aircraft owner statements (view-only)</th>';
+    mx.appendChild(achdr);
+    var uac=u.ac||[];
+    ACTAILS.forEach(function(tl){
+      var tr=document.createElement('tr');
+      tr.innerHTML='<td><b>'+esc(tl)+'</b></td><td class="small">owner sees this aircraft only</td>'
+        +'<td><button class="tg actg'+(uac.indexOf(tl)>=0?' on':'')+'" data-ac="'+esc(tl)+'" aria-label="toggle '+esc(tl)+'"></button></td>';
       mx.appendChild(tr);
     });
     mx.querySelectorAll('.tg').forEach(function(t){
@@ -785,11 +814,12 @@ function jaxauth_admin_html() {
   document.getElementById('save').addEventListener('click',function(){
     var u=cur();if(!u){return;}
     aerr.classList.remove('on');
-    var on=[];document.querySelectorAll('#mx .tg.on').forEach(function(t){on.push(t.dataset.k);});
-    var body={user_id:u.id,grants:on,instructor:document.getElementById('db').value,
+    var on=[];document.querySelectorAll('#mx .tg.on:not(.actg)').forEach(function(t){on.push(t.dataset.k);});
+    var ac=[];document.querySelectorAll('#mx .actg.on').forEach(function(t){ac.push(t.dataset.ac);});
+    var body={user_id:u.id,grants:on,aircraft:ac,instructor:document.getElementById('db').value,
       disabled:document.getElementById('dd').checked};
     api('admin/save-user',body).then(function(x){
-      if(x.s===200&&x.j&&x.j.ok){u.g=on;u.b=body.instructor;u.d=body.disabled;okFlash();renderUsers();
+      if(x.s===200&&x.j&&x.j.ok){u.g=on;u.ac=ac;u.b=body.instructor;u.d=body.disabled;okFlash();renderUsers();
         LOG.unshift({t:'just now',who:'you',txt:'saved '+u.n+'.'});renderLog();return;}
       fail(x.j&&x.j.message?x.j.message:'Save failed.');
     }).catch(function(){fail('Could not reach the site.');});
