@@ -15,7 +15,12 @@
        page, each dashboard shortcode renders only if their grants
        include its key. Anonymous visitors are untouched - the page
        passwords keep working exactly as before (dual access during
-       rollout).
+       rollout) - EXCEPT for the keys in jaxauth_login_only_keys()
+       (currently 'pay' and 'pay.rates'), which refuse anonymous
+       visitors outright. Ben, punch list 12: page 5787 carries the
+       payroll widget behind the SAME password as the Revenue AUTO
+       dashboard, so anyone with that password was already inside
+       payroll. See the gate itself for the full reasoning.
      - post_password_required: a logged-in user WITH the page's key
        skips the password prompt entirely.
      Deactivating this snippet restores the old behavior completely.
@@ -80,15 +85,19 @@ if (!defined('JAXAUTH_LOCK_SECS')) { define('JAXAUTH_LOCK_SECS', 900); }
 function jaxauth_registry() {
   return [
     'auto'      => ['Revenue - AUTO', 'auto-refreshed dashboard'],
-    'pay'       => ['Payroll widget', 'all-instructor pay table'],
-    'pay.rates' => ['Rate editor', 'instructor pay rates page'],
-    'sales'     => ['Sales pipeline', 'revenue + pipeline dashboard'],
+    'pay'       => ['Payroll widget', 'the Pay Portal - instructors, contractors, W2, MX'],
+    'pay.rates' => ['Rate editor', 'pay rates page'],
+    'bonus'     => ['Bonus & review editor', 'add checkride passes + review mentions'],
+    'sales'     => ['Sales', 'pipeline, enrollment tracking and commissions'],
+    'marketing' => ['Marketing', 'Meta Ads + ad campaigns'],
+    'safety'    => ['Safety', 'company-wide FOQA safety data'],
+    'mxtime'    => ['MX Timeclock', 'mechanic clock in/out, pay and task mix'],
     'tax'       => ['Sales tax', 'aircraft sales tax page'],
-    'requests'  => ['Punch list', 'current tasks'],
     'docs'      => ['Documents', 'archive & search'],
     'expense'   => ['Add expenses', 'enter expenses on the owner P/L'],
+    'ownerstmt' => ['Aircraft owner statements', 'staff view - every plane P/L'],
     'owner'     => ['My Aircraft', 'your aircraft statements (owners)'],
-    'invoice'   => ['Own Instructor Invoice', 'only the bound instructor'],
+    'invoice'   => ['Own pay dashboard', 'only the bound person - instructor or 1099 contractor'],
     'access'    => ['Access admin', 'this admin panel'],
   ];
 }
@@ -99,11 +108,17 @@ function jaxauth_shortcode_map() {
     'jaxaero_payroll'        => 'pay',
     'jaxaero_rate_editor'    => 'pay.rates',
     'jaxaero_revenue_sales'  => 'sales',
+    'jaxaero_sales_pipeline' => 'sales',
+    'jaxaero_marketing'      => 'marketing',
+    'jaxaero_safety'         => 'safety',
+    'jaxaero_mx_time'        => 'mxtime',
+    'jaxaero_sales_marketing' => 'sm',
     'jaxaero_tax'            => 'tax',
     'jaxaero_requests'       => 'requests',
     'jaxaero_documents'      => 'docs',
     'jaxaero_instructor_pay' => 'invoice',
     'jaxaero_owner_portal'   => 'owner',
+    'jaxaero_aircraft_owner' => 'ownerstmt',
   ];
 }
 
@@ -138,6 +153,47 @@ function jaxauth_enabled($uid) {
   return get_user_meta($uid, 'jaxauth_disabled', true) !== '1';
 }
 
+/* Ryan, Aug 25: the page a bound CFI's own invoice lives on, or ['', 0].
+   Requires the invoice grant (admins pass) plus an instructor binding whose
+   page instructor-pay-<slug> exists. */
+function jaxauth_invoice_page($user = null) {
+  $user = ($user instanceof WP_User) ? $user : wp_get_current_user();
+  if (!$user || !$user->exists()) { return ['', 0]; }
+  if (!jaxauth_is_admin($user) && !jaxauth_enabled($user->ID)) { return ['', 0]; }
+  if (!jaxauth_is_admin($user) && !in_array('invoice', jaxauth_grants($user->ID), true)) { return ['', 0]; }
+  $bound = (string) get_user_meta($user->ID, 'jaxauth_instructor', true);
+  if ($bound === '') { return ['', 0]; }
+  /* Ryan, Aug 31: contractors' pages live at contractor-pay-<slug>; instructors
+     keep instructor-pay-<slug>. Resolve contractor first, fall back. */
+  $pg = get_page_by_path('contractor-pay-' . sanitize_title($bound));
+  if (!$pg) { $pg = get_page_by_path('instructor-pay-' . sanitize_title($bound)); }
+  if (!$pg || $pg->post_status !== 'publish') { return ['', 0]; }
+  return [get_permalink($pg), (int) $pg->ID];
+}
+
+/* Ryan, Aug 25: all pages this user can open - mapped widgets they hold a
+   grant for (access admin only for admins) plus their bound invoice page. */
+function jaxauth_openable($user = null) {
+  $user = ($user instanceof WP_User) ? $user : wp_get_current_user();
+  if (!$user || !$user->exists()) { return []; }
+  $reg = jaxauth_registry();
+  $pages = get_option('jaxauth_pages', []);
+  $out = [];
+  if (is_array($pages)) {
+    foreach ($pages as $pid => $key) {
+      if ($key === '' || !isset($reg[$key])) { continue; }
+      if ($key === 'access' && !jaxauth_is_admin($user)) { continue; }
+      if (!jaxauth_can($key, $user->ID)) { continue; }
+      if (get_post_status($pid) !== 'publish') { continue; }
+      $l = get_permalink($pid);
+      if ($l) { $out[] = ['k' => $key, 't' => $reg[$key][0], 'u' => $l]; }
+    }
+  }
+  $ipd = jaxauth_invoice_page($user);
+  if ($ipd[0] !== '') { $out[] = ['k' => 'invoice', 't' => 'My pay dashboard', 'u' => $ipd[0]]; }
+  return $out;
+}
+
 function jaxauth_can($key, $uid = 0) {
   $uid = $uid ? $uid : get_current_user_id();
   if (!$uid) { return false; }
@@ -145,6 +201,18 @@ function jaxauth_can($key, $uid = 0) {
   $user = get_user_by('id', $uid);
   if (jaxauth_is_admin($user)) { return true; }
   return in_array($key, jaxauth_grants($uid), true);
+}
+
+/* Ryan, Aug 25: audit entries carry the acting user's IP. WP Engine's edge
+   sets REMOTE_ADDR to the real client; X-Forwarded-For's first hop is the
+   fallback. Server-side contexts (cron, CLI) log with no IP. */
+function jaxauth_client_ip() {
+  $ip = isset($_SERVER['REMOTE_ADDR']) ? trim((string) $_SERVER['REMOTE_ADDR']) : '';
+  if ($ip === '' && isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+    $parts = explode(',', (string) $_SERVER['HTTP_X_FORWARDED_FOR']);
+    $ip = trim($parts[0]);
+  }
+  return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : '';
 }
 
 function jaxauth_log_add($txt) {
@@ -155,6 +223,7 @@ function jaxauth_log_add($txt) {
     't'   => current_time('M j, g:i A'),
     'who' => ($who && $who->exists()) ? $who->display_name : 'system',
     'txt' => sanitize_text_field($txt),
+    'ip'  => jaxauth_client_ip(),
   ]);
   if (count($log) > JAXAUTH_MAX_LOG) { $log = array_slice($log, 0, JAXAUTH_MAX_LOG); }
   update_option('jaxauth_log', $log, false);
@@ -187,10 +256,78 @@ add_action('wp', function () {
   }
 });
 
+/* Ryan, Aug 25: after sign-in, staff land on the Revenue AUTO dashboard and
+ * owner-only accounts land on their My Aircraft page. Users who can open
+ * neither (or who must change their password first) get the portal home. */
+function jaxauth_default_dest($user = null) {
+  $user = ($user instanceof WP_User) ? $user : wp_get_current_user();
+  $homeP = get_option('jaxauth_signin_page');
+  $home  = $homeP ? get_permalink($homeP) : home_url('/');
+  if (!$user || !$user->exists()) { return $home; }
+  /* disabled mid-session: every grant check fails, so the only honest
+     destination is the portal home - never a page that will deny them */
+  if (!jaxauth_is_admin($user) && !jaxauth_enabled($user->ID)) { return $home; }
+  $pages = get_option('jaxauth_pages', []);
+  $find = function ($key) use ($pages) {
+    if (is_array($pages)) { foreach ($pages as $pid => $k) { if ($k === $key && get_post_status($pid) === 'publish') { $l = get_permalink($pid); if ($l) { return $l; } } } }
+    return '';
+  };
+  $grants = jaxauth_grants($user->ID);
+  /* Ben, Aug 31 (punch list 12 follow-up): every user lands on their primary
+     work area - their Canvas - never a widget selector. An explicit per-user
+     canvas page wins outright; widgets are turned on and off ON that page. */
+  $canvasP = (int) get_user_meta($user->ID, 'jaxauth_canvas', true);
+  if ($canvasP && get_post_status($canvasP) === 'publish') {
+    $cl = get_permalink($canvasP);
+    if ($cl) { return $cl; }
+  }
+  /* Ryan, Aug 31: managed users land on THE User Canvas, which composes their
+     widgets from the Access Admin toggles - so a toggle works the moment it is
+     flipped. WP admins keep the legacy staff routing below. */
+  if (!user_can($user->ID, 'manage_options')) {
+    $sharedC = (int) get_option('jaxauth_canvas_page');
+    if ($sharedC && get_post_status($sharedC) === 'publish' && count(jaxauth_canvas_widgets($user)) > 0) {
+      $scl = get_permalink($sharedC);
+      if ($scl) { return $scl; }
+    }
+  }
+  /* Ryan, Aug 25: a starred home screen wins while they can still open it */
+  $pref = (string) get_user_meta($user->ID, 'jaxauth_home', true);
+  if ($pref === 'access' && !jaxauth_is_admin($user)) { $pref = ''; }
+  if ($pref === 'invoice') {
+    $ipd = jaxauth_invoice_page($user);
+    if ($ipd[0] !== '') { return $ipd[0]; }
+    $pref = '';
+  }
+  if ($pref !== '' && (jaxauth_is_admin($user) || in_array($pref, $grants, true))) {
+    $d = $find($pref);
+    if ($d !== '') { return $d; }
+  }
+  /* Ben, Aug 31: a bound instructor or contractor's canvas IS their own page */
+  $bp = jaxauth_invoice_page($user);
+  if ($bp[0] !== '' && !jaxauth_is_admin($user) && count(array_diff($grants, ['invoice', 'owner'])) === 0) {
+    return $bp[0];
+  }
+  $isStaff = jaxauth_is_admin($user) || count(array_diff($grants, ['owner'])) > 0;
+  if ($isStaff && (jaxauth_is_admin($user) || in_array('auto', $grants, true))) {
+    $d = $find('auto'); if ($d !== '') { return $d; }
+  }
+  if (!$isStaff && in_array('owner', $grants, true)) {
+    $d = $find('owner'); if ($d !== '') { return $d; }
+  }
+  /* Ryan, Aug 25: anyone whose account opens exactly one widget lands on it */
+  $open = jaxauth_openable($user);
+  if (count($open) === 1) { return $open[0]['u']; }
+  return $home;
+}
+
 add_filter('login_redirect', function ($to, $requested, $user) {
-  if ($user instanceof WP_User && jaxauth_is_managed($user) && !jaxauth_is_admin($user) && !user_can($user, 'edit_posts')) {
-    $p = get_option('jaxauth_signin_page');
-    return $p ? get_permalink($p) : home_url('/');
+  if ($user instanceof WP_User && jaxauth_is_managed($user) && !user_can($user, 'edit_posts')) {
+    if (get_user_meta($user->ID, 'jaxauth_must_change', true) === '1') {
+      $p = get_option('jaxauth_signin_page');
+      return $p ? get_permalink($p) : home_url('/');
+    }
+    return jaxauth_default_dest($user);
   }
   return $to;
 }, 10, 3);
@@ -206,16 +343,47 @@ add_action('admin_init', function () {
 
 /* -------------------- gating -------------------- */
 
+/* Ben, punch list 12: "user access locked down to Kim, me, Ryan, and John, no
+   one else - Do that now."
+
+   These keys do NOT fall through to the page password. Every other gated widget
+   does, on purpose: the Elementor password is the outer door and the 16
+   instructor pages are reached that way by design. But page 5787 carries the
+   payroll widget alongside the Revenue AUTO dashboard behind ONE shared
+   password, so every holder of that password was already inside payroll - and
+   window.PAY carries each instructor's rate, net pay and home address.
+
+   So for these two: no account, no payroll. The password stays exactly as it is,
+   which is what keeps the Revenue AUTO audience on 5787 undisturbed. Keep this
+   list to the money keys - a blanket rule would deny anonymous visitors on every
+   mapped shortcode and lock all 16 instructors out of their own pages. */
+function jaxauth_login_only_keys() {
+  return array('pay', 'pay.rates');
+}
+
 /* Widget gate: a signed-in managed user only renders shortcodes they
-   hold the key for. Anonymous visitors fall through to page passwords. */
+   hold the key for. Anonymous visitors fall through to page passwords,
+   EXCEPT for jaxauth_login_only_keys() - see above. */
 add_filter('pre_do_shortcode_tag', function ($ret, $tag, $attr) {
   $map = jaxauth_shortcode_map();
   if (!isset($map[$tag])) { return $ret; }
-  $u = wp_get_current_user();
-  if (!$u || !$u->exists() || !jaxauth_is_managed($u)) { return $ret; }
   $key = $map[$tag];
+  $u = wp_get_current_user();
+  $signedIn = ($u && $u->exists());
+  if (in_array($key, jaxauth_login_only_keys(), true)) {
+    /* admins are not "managed" - they carry no grants meta - so they are
+       answered here before the managed check below would drop them */
+    if ($signedIn && jaxauth_is_admin($u)) { return $ret; }
+    if (!$signedIn) { return jaxauth_denied_html('signin'); }
+    if (!jaxauth_is_managed($u) || !jaxauth_can($key, $u->ID)) { return jaxauth_denied_html(); }
+    return $ret;
+  }
+  if (!$signedIn || !jaxauth_is_managed($u)) { return $ret; }
   if ($key === 'invoice') {
     if (jaxauth_is_admin($u)) { return $ret; }
+    /* holders of the payroll grant already see every instructor's pay in the
+       payroll widget - IP View shows them strictly less than that */
+    if (jaxauth_can('pay', $u->ID)) { return $ret; }
     $slug = isset($attr['key']) ? $attr['key'] : '';
     $bound = get_user_meta($u->ID, 'jaxauth_instructor', true);
     if (!jaxauth_can('invoice', $u->ID) || $bound === '' || $slug !== $bound) {
@@ -227,22 +395,60 @@ add_filter('pre_do_shortcode_tag', function ($ret, $tag, $attr) {
   return $ret;
 }, 10, 3);
 
-function jaxauth_denied_html() {
+function jaxauth_denied_html($mode = 'grant') {
   $p = get_option('jaxauth_signin_page');
   $home = $p ? esc_url(get_permalink($p)) : esc_url(home_url('/'));
+  /* "not enabled for your account" reads wrong at someone who has no account -
+     they arrived on a page password, so tell them the actual next step */
+  $head = ($mode === 'signin')
+    ? 'Please sign in to see this.'
+    : 'This widget is not enabled for your account.';
+  $sub = ($mode === 'signin')
+    ? 'Payroll needs a JAXAERO account. The page password does not open it.'
+    : 'If you think it should be, ask Ryan.';
+  $link = ($mode === 'signin') ? 'Sign in' : 'Back to your dashboard';
   return '<div style="max-width:480px;margin:40px auto;padding:24px;text-align:center;'
     . 'font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1F2F54;'
     . 'background:#fff;border:1px solid #e6e9ef;border-radius:14px">'
-    . '<b>This widget is not enabled for your account.</b><br>'
-    . '<span style="font-size:13px;color:#5b6577">If you think it should be, ask Ryan.</span><br><br>'
-    . '<a href="' . $home . '" style="color:#C10F1B;font-weight:700;font-size:13px">Back to your dashboard</a></div>';
+    . '<b>' . esc_html($head) . '</b><br>'
+    . '<span style="font-size:13px;color:#5b6577">' . esc_html($sub) . '</span><br><br>'
+    . '<a href="' . $home . '" style="color:#C10F1B;font-weight:700;font-size:13px">' . esc_html($link) . '</a></div>';
 }
 
 /* Password bypass: a signed-in user who holds the page key does not
    need the page password. Everyone else sees the form as before. */
+/* Ryan, Aug 31: contractor pages moved from instructor-pay-<slug> to
+   contractor-pay-<slug>; WP's old-slug redirect does not cover these page
+   renames, so 301 the old paths ourselves. Driven by jaxpay_contractors, so a
+   future contractor's rename needs no code change. */
+add_action('template_redirect', function () {
+  if (!is_404()) { return; }
+  $path = trim((string) wp_parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH), '/');
+  if (strpos($path, 'instructor-pay-') !== 0) { return; }
+  $slug = substr($path, strlen('instructor-pay-'));
+  $ct = get_option('jaxpay_contractors', array());
+  if (!is_array($ct) || !in_array($slug, $ct, true)) { return; }
+  $pg = get_page_by_path('contractor-pay-' . $slug);
+  if ($pg && $pg->post_status === 'publish') { wp_safe_redirect(get_permalink($pg), 301); exit; }
+});
+
 add_filter('post_password_required', function ($required, $post) {
   if (!$required || !$post) { return $required; }
   $u = wp_get_current_user();
+  /* bound people open their OWN pay page (instructor-pay-* or contractor-pay-*);
+     admins and pay-holders any of them */
+  $jxPayPage = (strpos($post->post_name, 'instructor-pay-') === 0 && $post->post_name !== 'instructor-pay-rates')
+            || strpos($post->post_name, 'contractor-pay-') === 0;
+  if ($u && $u->exists() && $jxPayPage) {
+    if (jaxauth_is_admin($u)) { return false; }
+    if (jaxauth_is_managed($u) && jaxauth_enabled($u->ID) && jaxauth_can('pay', $u->ID)) { return false; }
+    if (jaxauth_is_managed($u) && jaxauth_enabled($u->ID) && in_array('invoice', jaxauth_grants($u->ID), true)) {
+      $jxB = sanitize_title((string) get_user_meta($u->ID, 'jaxauth_instructor', true));
+      if ($jxB !== '' && in_array($post->post_name, array('instructor-pay-' . $jxB, 'contractor-pay-' . $jxB), true)) {
+        return false;
+      }
+    }
+  }
   /* dashboard admins skip the page password on every MAPPED page - some mapped
      pages (the punch list) carry a random password nobody knows, portal-only */
   if ($u && $u->exists() && jaxauth_is_admin($u)) {
@@ -264,9 +470,30 @@ add_action('template_redirect', function () {
   $pid = get_queried_object_id();
   $adminPage = (int) get_option('jaxauth_admin_page');
   if ($adminPage && $pid === $adminPage && !jaxauth_is_admin()) {
+    /* this 302 depends on WHO is asking, so it must never be stored: without
+       this the "not an admin, go to signin" answer was cacheable for 600s and
+       got replayed to an admin, bouncing them to their home screen */
+    nocache_headers();
     $p = get_option('jaxauth_signin_page');
     wp_safe_redirect($p ? get_permalink($p) : home_url('/'));
     exit;
+  }
+  /* Ryan, Aug 25: the signin/home page acts as a router for signed-in users -
+     staff go to Revenue AUTO, owner-only accounts to My Aircraft. The cards
+     screen still renders for ?chpw=1 (password form) and forced changes.
+     Loop guard: never redirect when the destination IS this page. */
+  $signinP = (int) get_option('jaxauth_signin_page');
+  if ($signinP && $pid === $signinP && is_user_logged_in() && !isset($_GET['chpw']) && !isset($_GET['settings'])) {
+    $ru = wp_get_current_user();
+    if (($ru && $ru->exists() && (jaxauth_is_managed($ru) || jaxauth_is_admin($ru)))
+        && get_user_meta($ru->ID, 'jaxauth_must_change', true) !== '1') {
+      $rdest = jaxauth_default_dest($ru);
+      if ($rdest !== '' && untrailingslashit($rdest) !== untrailingslashit(get_permalink($signinP))) {
+        nocache_headers();
+        wp_safe_redirect($rdest);
+        exit;
+      }
+    }
   }
   $pages = get_option('jaxauth_pages', []);
   if (is_user_logged_in() && is_array($pages) && isset($pages[$pid])) {
@@ -304,7 +531,9 @@ add_action('rest_api_init', function () {
   ]);
   register_rest_route('jaxauth/v1', '/change-password', [
     'methods' => 'POST',
-    'permission_callback' => function () { return is_user_logged_in(); },
+    /* a disabled account must not be able to set a fresh password and collect
+       a new 14-day cookie on the way out */
+    'permission_callback' => function () { return is_user_logged_in() && jaxauth_enabled(get_current_user_id()); },
     'callback' => 'jaxauth_rest_change_pw',
   ]);
   register_rest_route('jaxauth/v1', '/admin/save-user', [
@@ -317,10 +546,46 @@ add_action('rest_api_init', function () {
     'permission_callback' => 'jaxauth_is_admin',
     'callback' => 'jaxauth_rest_create_user',
   ]);
+  register_rest_route('jaxauth/v1', '/me/home', [
+    'methods' => 'POST',
+    'permission_callback' => function () {
+      $u = wp_get_current_user();
+      if (!$u || !$u->exists() || !jaxauth_enabled($u->ID)) { return false; }
+      return jaxauth_is_managed($u) || jaxauth_is_admin($u);
+    },
+    'callback' => 'jaxauth_rest_me_home',
+  ]);
+  register_rest_route('jaxauth/v1', '/help', [
+    'methods' => 'POST',
+    'permission_callback' => function () {
+      $u = wp_get_current_user();
+      if (!$u || !$u->exists() || !jaxauth_enabled($u->ID)) { return false; }
+      return jaxauth_is_managed($u) || jaxauth_is_admin($u);
+    },
+    'callback' => 'jaxauth_rest_help',
+  ]);
+  register_rest_route('jaxauth/v1', '/admin/viewas', [
+    'methods' => 'POST',
+    /* Ben, punch list 13: every Pay Portal holder may preview - admins plus
+       the pay grant (Kim, John). The handler narrows what non-admins may
+       target; jaxauth_viewas_boot applies the same rule at swap time. */
+    'permission_callback' => function () {
+      $u = wp_get_current_user();
+      if (!$u || !$u->exists()) { return false; }
+      if (jaxauth_is_admin($u)) { return true; }
+      return jaxauth_is_managed($u) && jaxauth_enabled($u->ID) && jaxauth_can('pay', $u->ID);
+    },
+    'callback' => 'jaxauth_rest_viewas',
+  ]);
   register_rest_route('jaxauth/v1', '/admin/reset-password', [
     'methods' => 'POST',
     'permission_callback' => 'jaxauth_is_admin',
     'callback' => 'jaxauth_rest_reset_pw',
+  ]);
+  register_rest_route('jaxauth/v1', '/admin/delete-user', [
+    'methods' => 'POST',
+    'permission_callback' => 'jaxauth_is_admin',
+    'callback' => 'jaxauth_rest_delete_user',
   ]);
   register_rest_route('jaxauth/v1', '/admin/ai-key', [
     'methods' => 'POST',
@@ -349,9 +614,12 @@ function jaxauth_rest_login(WP_REST_Request $req) {
   }
   wp_set_auth_cookie($user->ID, true);
   jaxauth_log_add($user->display_name . ' signed in.');
+  $mustNow = get_user_meta($user->ID, 'jaxauth_must_change', true) === '1';
+  $dest = $mustNow ? '' : jaxauth_default_dest($user);
   return [
     'ok' => true,
-    'mustChange' => get_user_meta($user->ID, 'jaxauth_must_change', true) === '1',
+    'mustChange' => $mustNow,
+    'dest' => $dest,
   ];
 }
 
@@ -370,7 +638,7 @@ function jaxauth_rest_change_pw(WP_REST_Request $req) {
   delete_user_meta($u->ID, 'jaxauth_must_change');
   wp_set_auth_cookie($u->ID, true);
   jaxauth_log_add($u->display_name . ' changed their password.');
-  return ['ok' => true];
+  return ['ok' => true, 'dest' => jaxauth_default_dest($u)];
 }
 
 function jaxauth_rest_save_user(WP_REST_Request $req) {
@@ -380,6 +648,7 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
     return new WP_Error('jaxauth_nouser', 'No such managed user.', ['status' => 404]);
   }
   $me = get_current_user_id();
+  $newName = sanitize_text_field((string) $req->get_param('name'));
   $grants = $req->get_param('grants');
   $grants = is_array($grants)
     ? array_values(array_intersect(array_map('sanitize_text_field', $grants), array_keys(jaxauth_registry())))
@@ -388,6 +657,16 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
   $disabled = $req->get_param('disabled') ? '1' : '';
   if ($uid === $me && $disabled === '1') {
     return new WP_Error('jaxauth_self', 'You cannot disable your own account.', ['status' => 400]);
+  }
+  /* Ryan, Aug 25: admins can fix name spelling after creation. Sits below the
+     guard so a rejected save writes nothing at all. */
+  if ($newName !== '' && $newName !== $user->display_name) {
+    $oldName = $user->display_name;
+    $upd = wp_update_user(['ID' => $uid, 'display_name' => $newName]);
+    if (!is_wp_error($upd)) {
+      jaxauth_log_add('renamed "' . $oldName . '" to "' . $newName . '".');
+      $user->display_name = $newName;
+    }
   }
   /* per-owner aircraft assignment drives the read-only owner widget and the
      'owner' card: any assigned tail grants 'owner', none removes it */
@@ -401,8 +680,26 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
   if ($ac) { $grants[] = 'owner'; }
   $old = jaxauth_grants($uid);
   update_user_meta($uid, 'jaxauth_grants', $grants);
+  /* starred home screen - only a granted widget that has a page qualifies */
+  $homeSel = sanitize_text_field((string) $req->get_param('home'));
+  $homePageKeys = array_values(array_diff(array_intersect(array_values((array) get_option('jaxauth_pages', [])), array_keys(jaxauth_registry())), ['access']));
+  if ($homeSel !== '' && (!in_array($homeSel, $grants, true) || !in_array($homeSel, $homePageKeys, true))) { $homeSel = ''; }
+  $oldHome = (string) get_user_meta($uid, 'jaxauth_home', true);
+  if ($homeSel !== $oldHome) {
+    if ($homeSel === '') { delete_user_meta($uid, 'jaxauth_home'); }
+    else { update_user_meta($uid, 'jaxauth_home', $homeSel); }
+    jaxauth_log_add($homeSel === ''
+      ? 'cleared the home screen for "' . $user->display_name . '".'
+      : 'set "' . $user->display_name . '" home screen to ' . $homeSel . '.');
+  }
   update_user_meta($uid, 'jaxauth_instructor', $inst);
-  if ($disabled === '1') { update_user_meta($uid, 'jaxauth_disabled', '1'); }
+  if ($disabled === '1') {
+    update_user_meta($uid, 'jaxauth_disabled', '1');
+    /* the meta alone only blocks future gate checks - an already-signed-in
+       browser kept working. End every session so "Disabled" takes effect now. */
+    $st = WP_Session_Tokens::get_instance($uid);
+    if ($st) { $st->destroy_all(); }
+  }
   else { delete_user_meta($uid, 'jaxauth_disabled'); }
   $added = implode(', ', array_diff($grants, $old));
   $removed = implode(', ', array_diff($old, $grants));
@@ -451,6 +748,183 @@ function jaxauth_rest_create_user(WP_REST_Request $req) {
   return ['ok' => true, 'user_id' => $uid, 'temp_password' => $temp];
 }
 
+/* Ryan, Aug 25: each user can star one of their own home cards to pick
+ * their landing page - the same jaxauth_home meta the admin star writes. */
+function jaxauth_rest_me_home(WP_REST_Request $req) {
+  $u = wp_get_current_user();
+  if (!$u || !$u->exists()) { return new WP_Error('jaxauth_auth', 'Sign in first.', ['status' => 401]); }
+  $sel = sanitize_text_field((string) $req->get_param('home'));
+  $keys = array_values(array_diff(array_intersect(array_values((array) get_option('jaxauth_pages', [])), array_keys(jaxauth_registry())), ['access']));
+  $invOk = false;
+  if ($sel === 'invoice') { $ipd = jaxauth_invoice_page($u); $invOk = $ipd[0] !== ''; }
+  if ($sel !== '' && !$invOk && (!in_array($sel, $keys, true) || !jaxauth_can($sel, $u->ID))) {
+    return new WP_Error('jaxauth_badkey', 'That widget cannot be a home screen.', ['status' => 400]);
+  }
+  if ($sel === '') { delete_user_meta($u->ID, 'jaxauth_home'); }
+  else { update_user_meta($u->ID, 'jaxauth_home', $sel); }
+  jaxauth_log_add($u->display_name . ($sel === '' ? ' cleared their own home screen.' : ' set their own home screen to ' . $sel . '.'));
+  return ['ok' => true, 'home' => $sel];
+}
+
+/* Ryan, Aug 25: "request user help" from the menu - emails Ryan directly.
+ * Lightly rate-limited per user so a stuck retry button cannot flood him. */
+function jaxauth_rest_help(WP_REST_Request $req) {
+  $u = wp_get_current_user();
+  if (!$u || !$u->exists()) { return new WP_Error('jaxauth_auth', 'Sign in first.', ['status' => 401]); }
+  if (get_transient('jaxauth_help_' . $u->ID)) {
+    return new WP_Error('jaxauth_slow', 'A help request was sent moments ago. Give Ryan a few minutes to see it.', ['status' => 429]);
+  }
+  $msg = substr(sanitize_textarea_field((string) $req->get_param('message')), 0, 2000);
+  if (trim($msg) === '') { return new WP_Error('jaxauth_empty', 'Describe the problem in a sentence or two first.', ['status' => 400]); }
+  $page = substr(sanitize_text_field((string) $req->get_param('page')), 0, 300);
+  $body = "Help request from the JAXAERO portal\n\n"
+        . 'Who:  ' . $u->display_name . ' (' . $u->user_email . ")\n"
+        . 'Page: ' . $page . "\n"
+        . 'When: ' . wp_date('M j, Y g:i A') . "\n\nMessage:\n" . $msg . "\n";
+  /* lock BEFORE the slow wp_mail round-trip so parallel clicks cannot burst past the limit */
+  set_transient('jaxauth_help_' . $u->ID, 1, 5 * MINUTE_IN_SECONDS);
+  $sent = wp_mail('ryan.winter@flyjaxaero.com', 'Portal help request - ' . $u->display_name, $body);
+  if (!$sent) { delete_transient('jaxauth_help_' . $u->ID); return new WP_Error('jaxauth_mail', 'The email could not be sent - call or text Ryan directly.', ['status' => 500]); }
+  jaxauth_log_add($u->display_name . ' sent a help request.');
+  return ['ok' => true];
+}
+
+/* -------------------- view-as preview (Ryan, Aug 25) --------------------
+   An admin sees the portal exactly as a managed user sees it. The swap covers
+   FRONT-END page requests only: wp-json, wp-admin, wp-login and the
+   access-admin page keep the REAL identity, so the preview cannot write -
+   REST nonces minted under the preview identity never validate against the
+   admin's session. Auto-expires after 15 minutes; banner link ends it. */
+function jaxauth_rest_viewas(WP_REST_Request $req) {
+  $uid = (int) $req->get_param('user_id');
+  $t = get_user_by('id', $uid);
+  if (!$t || (!jaxauth_is_managed($t) && !jaxauth_is_admin($t))) { return new WP_Error('jaxauth_nouser', 'No such user.', ['status' => 404]); }
+  if (!jaxauth_is_admin($t) && !jaxauth_enabled($t->ID)) { return new WP_Error('jaxauth_off', 'That account is disabled - nothing to preview.', ['status' => 400]); }
+  if (!jaxauth_is_admin() && jaxauth_is_admin($t)) { return new WP_Error('jaxauth_scope', 'Only an admin can preview an admin account.', ['status' => 403]); }
+  set_transient('jaxauth_viewas_' . get_current_user_id(), $t->ID, 15 * MINUTE_IN_SECONDS);
+  /* Ben, punch list 11: exiting a preview dropped you on the Access Admin page no
+     matter where you started. Anyone who launched from the payroll widget on Home
+     - which is where the View as IP button actually lives - got bounced somewhere
+     they had never been. Remember the launching URL and return to it on exit.
+     wp_validate_redirect keeps this to our own host, so a crafted "from" cannot
+     turn Exit preview into an open redirect. */
+  $from = trim((string) $req->get_param('from'));
+  /* These widgets render inside an iframe srcdoc, where location.href is the
+     literal string "about:srcdoc" - it validates to nothing and the preview would
+     silently fall back to Access Admin, which is the very complaint being fixed.
+     The callers send window.top.location.href; the Referer is the safety net for
+     any caller that forgets. */
+  if ($from === '' || stripos($from, 'about:') === 0) {
+    $from = isset($_SERVER['HTTP_REFERER']) ? (string) $_SERVER['HTTP_REFERER'] : '';
+  }
+  $from = ($from !== '') ? wp_validate_redirect(esc_url_raw($from), '') : '';
+  if ($from !== '') { set_transient('jaxauth_viewas_from_' . get_current_user_id(), $from, 15 * MINUTE_IN_SECONDS); }
+  else { delete_transient('jaxauth_viewas_from_' . get_current_user_id()); }
+  jaxauth_log_add('started a 15-minute view-as preview of "' . $t->display_name . '".');
+  $p = get_option('jaxauth_signin_page');
+  return ['ok' => true, 'start' => $p ? get_permalink($p) : home_url('/')];
+}
+
+add_action('init', 'jaxauth_viewas_boot', 0);
+function jaxauth_viewas_boot() {
+  /* runs at init, where every WP API is safely available - never earlier */
+  if (is_admin()) { return; }
+  $method = isset($_SERVER['REQUEST_METHOD']) ? strtoupper((string) $_SERVER['REQUEST_METHOD']) : 'GET';
+  if ($method !== 'GET' && $method !== 'HEAD') { return; }
+  if (isset($_GET['jaxviewas'])) { return; }
+  $urlp = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
+  /* Aug 26: WordPress also serves REST at /?rest_route=..., which matches neither the
+     pretty prefix below nor the derived REST path, so a preview would swap identity on
+     those reads too. Keep the real identity for every REST shape. */
+  if ($urlp === '' || strpos($urlp, '/wp-json') === 0 || strpos($urlp, 'rest_route=') !== false || strpos($urlp, 'wp-login.php') !== false) { return; }
+  $uid = get_current_user_id();
+  if (!$uid) { return; }
+  $ru = wp_get_current_user();
+  if (!$ru || !$ru->exists()) { return; }
+  /* Ben, punch list 13: pay-grant holders preview too. The route only ever
+     arms a transient for someone this same rule admits, so the check here is
+     belt and suspenders. */
+  if (!jaxauth_is_admin($ru)
+      && !(jaxauth_is_managed($ru) && jaxauth_enabled($uid) && jaxauth_can('pay', $uid))) { return; }
+  $t = (int) get_transient('jaxauth_viewas_' . $uid);
+  if (!$t || $t === (int) $uid) { return; }
+  $restP = (string) wp_parse_url(rest_url(), PHP_URL_PATH);
+  if ($restP !== '' && strpos($urlp, $restP) === 0) { return; }
+  $adminPage = (int) get_option('jaxauth_admin_page');
+  if ($adminPage) {
+    $ap = (string) wp_parse_url(get_permalink($adminPage), PHP_URL_PATH);
+    /* compare on the normalized path: a raw prefix test let /access-admin
+       (no trailing slash) miss the exemption, which would swap identity to the
+       previewed user on the one page that must keep the real one */
+    $reqPath = (string) wp_parse_url($urlp, PHP_URL_PATH);
+    if ($ap !== '' && $ap !== '/'
+        && untrailingslashit($reqPath) === untrailingslashit($ap)) { return; }
+  }
+  $tu = get_user_by('id', $t);
+  if (!$tu) { return; }
+  /* the target half of the route's rule, re-checked at swap time: a role change
+     inside the 15-minute window must not let a pay-grant viewer wear an admin */
+  if (!jaxauth_is_admin($ru) && jaxauth_is_admin($tu)) { return; }
+  if (!jaxauth_is_admin($tu) && (!jaxauth_is_managed($tu) || !jaxauth_enabled($t))) { return; }
+  $GLOBALS['jaxauth_viewas_real'] = (int) $uid;
+  $GLOBALS['jaxauth_viewas_target'] = $t;
+  wp_set_current_user($t);
+}
+
+add_action('init', function () {
+  if (!isset($_GET['jaxviewas']) || $_GET['jaxviewas'] !== 'off') { return; }
+  /* jaxauth_viewas_boot bails out whenever jaxviewas is present, so the identity
+     is NOT swapped on this request - get_current_user_id() is the real admin and
+     the transient keys line up. */
+  $uid = get_current_user_id();
+  $back = '';
+  if ($uid) {
+    $back = (string) get_transient('jaxauth_viewas_from_' . $uid);
+    delete_transient('jaxauth_viewas_from_' . $uid);
+    if ($back !== '') { $back = wp_validate_redirect($back, ''); }
+  }
+  if ($uid && get_transient('jaxauth_viewas_' . $uid)) {
+    delete_transient('jaxauth_viewas_' . $uid);
+    jaxauth_log_add('ended the view-as preview.');
+  }
+  if ($back === '') {
+    $adminPage = (int) get_option('jaxauth_admin_page');
+    $back = $adminPage ? get_permalink($adminPage) : home_url('/');
+  }
+  wp_safe_redirect($back);
+  exit;
+});
+
+add_action('wp_footer', 'jaxauth_viewas_banner', 5);
+function jaxauth_viewas_banner() {
+  if (empty($GLOBALS['jaxauth_viewas_target'])) { return; }
+  $t = get_user_by('id', (int) $GLOBALS['jaxauth_viewas_target']);
+  $name = $t ? $t->display_name : 'user';
+  $exit = esc_url(add_query_arg('jaxviewas', 'off', home_url('/')));
+  ?>
+<div style="position:fixed;left:0;right:0;bottom:0;z-index:2147483000;background:#7a4b00;color:#fff;font-family:'Segoe UI',Roboto,Arial,sans-serif;font-size:13.5px;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;box-shadow:0 -4px 16px rgba(0,0,0,.25)">
+  <span>Preview: you are seeing the portal exactly as <b><?php echo esc_html($name); ?></b> sees it. Buttons that save or send will not work in this preview.</span>
+  <a href="<?php echo $exit; ?>" style="color:#fff !important;background:rgba(255,255,255,.18) !important;border:1px solid rgba(255,255,255,.5) !important;border-radius:8px !important;padding:5px 14px !important;font-weight:700 !important;text-decoration:none !important">Exit preview</a>
+</div>
+  <?php
+}
+
+/* Ryan, Aug 25: delete a managed account. Admins and your own account are
+   untouchable from here; the audit log keeps the person's history. */
+function jaxauth_rest_delete_user(WP_REST_Request $req) {
+  $uid = (int) $req->get_param('user_id');
+  $user = get_user_by('id', $uid);
+  if (!$user || !jaxauth_is_managed($user)) { return new WP_Error('jaxauth_nouser', 'No such managed user.', ['status' => 404]); }
+  if (jaxauth_is_admin($user)) { return new WP_Error('jaxauth_admin', 'Admins cannot be deleted from here.', ['status' => 400]); }
+  if ($uid === get_current_user_id()) { return new WP_Error('jaxauth_self', 'You cannot delete your own account.', ['status' => 400]); }
+  $name = $user->display_name;
+  $email = $user->user_email;
+  require_once ABSPATH . 'wp-admin/includes/user.php';
+  if (!wp_delete_user($uid)) { return new WP_Error('jaxauth_fail', 'The account could not be deleted.', ['status' => 500]); }
+  jaxauth_log_add('deleted the account "' . $name . '" (' . $email . '). Their history stays in this log.');
+  return ['ok' => true];
+}
+
 function jaxauth_rest_reset_pw(WP_REST_Request $req) {
   $uid = (int) $req->get_param('user_id');
   $user = get_user_by('id', $uid);
@@ -464,6 +938,328 @@ function jaxauth_rest_reset_pw(WP_REST_Request $req) {
   return ['ok' => true, 'temp_password' => $temp];
 }
 
+/* -------------------- the User Canvas (Ryan/Ben, Aug 31) --------------------
+ * One page, composed per viewer: every widget whose Access Admin toggle is ON
+ * for the CURRENT user renders here, in canonical order. View-as previews swap
+ * the current user at init, so a preview shows exactly what that person sees.
+ * Widgets are skipped, never replaced with denial panels - the canvas is what
+ * you have, not a list of what you lack. Order: the money dashboards first,
+ * then statements, then the person's own pay page, then tools. */
+function jaxauth_canvas_widgets($u) {
+  /* each entry: key (anchor id + grant), tag (shortcode), label (menu text) */
+  $out = array();
+  $order = array(
+    array('auto', '[jaxaero_revenue_auto]', 'Revenue Dashboard'),
+    array('pay', '[jaxaero_payroll]', 'Pay Portal'),
+    array('safety', '[jaxaero_safety]', 'Safety'),
+    array('mxtime', '[jaxaero_mx_time]', 'MX Timeclock'),
+    array('ownerstmt', '[jaxaero_aircraft_owner]', 'Aircraft Owner Statements'),
+    array('owner', '[jaxaero_owner_portal]', 'My Aircraft'),
+    array('sales', '[jaxaero_sales_pipeline]', 'Sales'),
+    array('marketing', '[jaxaero_marketing]', 'Marketing'),
+    array('tax', '[jaxaero_tax]', 'Sales Tax'),
+    array('docs', '[jaxaero_documents]', 'Documents'),
+  );
+  /* Ryan, Aug 31 PM: the canvas follows the ACTUAL Access Admin toggles for
+     everyone - including admins. jaxauth_can()'s admin bypass put every widget
+     on Ben's canvas regardless of his switches; jaxauth_grants() is the raw
+     toggle state. */
+  $cvsG = jaxauth_grants($u->ID);
+  foreach ($order as $w) {
+    if (in_array($w[0], $cvsG, true)) { $out[] = array('key' => $w[0], 'tag' => $w[1], 'label' => $w[2]); }
+    if ($w[0] === 'owner') {
+      /* the person's own pay page sits after statements, before the tools */
+      $ipd = jaxauth_invoice_page($u);
+      $bound = (string) get_user_meta($u->ID, 'jaxauth_instructor', true);
+      if ($ipd[0] !== '' && $bound !== '') { $out[] = array('key' => 'mypay', 'tag' => '[jaxaero_instructor_pay key="' . esc_attr(sanitize_title($bound)) . '"]', 'label' => 'My Pay'); }
+    }
+  }
+  return $out;
+}
+
+/* Ryan, Sep 2 (Tier 1): lazy-canvas fragments answer BEFORE the theme and
+   Elementor render - each ?jaxw fetch was spending ~65% of its time building
+   page chrome the loader immediately throws away. This handler replicates
+   the canvas shortcode's exact gates, emits the same #jaxwLazyPayload
+   fragment (accepting a comma list of keys) and exits. Anonymous, ungated
+   and unknown keys get the empty payload div - fails closed. The shortcode's
+   own lazy branch below stays as the fallback path. View-as still applies:
+   the identity swap ran at init 0, long before template_redirect. */
+add_action('template_redirect', function () {
+  $qid = (int) get_queried_object_id();
+  if (!$qid) { return; }
+  $shared = (int) get_option('jaxauth_canvas_page');
+  $mine = is_user_logged_in() ? (int) get_user_meta(get_current_user_id(), 'jaxauth_canvas', true) : 0;
+  if ($qid !== $shared && ($mine === 0 || $qid !== $mine)) { return; }
+  if (!isset($_GET['jaxw']) || !is_string($_GET['jaxw'])) {
+    /* full canvas page view: the render varies on the jaxDashTab cookie and
+       the signed-in identity - never let an edge cache replay it */
+    nocache_headers();
+    return;
+  }
+  if (!empty($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] !== 'GET') { return; }
+  nocache_headers();
+  header('Content-Type: text/html; charset=utf-8');
+  $out = '';
+  $u = wp_get_current_user();
+  $pg = get_post($qid);
+  $pwOk = !($pg && post_password_required($pg));
+  if ($pwOk && $u && $u->exists()
+      && (jaxauth_is_admin($u) || jaxauth_is_managed($u))
+      && (jaxauth_is_admin($u) || jaxauth_enabled($u->ID))) {
+    $tags = jaxauth_canvas_widgets($u);
+    if ($tags && count($tags) > 1) {
+      $want = array();
+      foreach (explode(',', (string) $_GET['jaxw']) as $lk) { $lk = sanitize_key($lk); if ($lk !== '') { $want[$lk] = 1; } }
+      $GLOBALS['jaxauth_canvas_render'] = true;
+      foreach ($tags as $t) {
+        if (isset($want[$t['key']])) { $out .= '<div id="jaxw-' . esc_attr($t['key']) . '">' . do_shortcode($t['tag']) . '</div>'; }
+      }
+      unset($GLOBALS['jaxauth_canvas_render']);
+    }
+  }
+  echo '<div id="jaxwLazyPayload">' . $out . '</div>';
+  exit;
+}, 0);
+
+add_shortcode('jaxauth_user_canvas', function () {
+  $u = wp_get_current_user();
+  if (!$u || !$u->exists()) { return ''; }
+  if (!jaxauth_is_admin($u) && !jaxauth_is_managed($u)) { return ''; }
+  if (!jaxauth_is_admin($u) && !jaxauth_enabled($u->ID)) { return ''; }
+  $tags = jaxauth_canvas_widgets($u);
+  if (!$tags) { return '<div style="max-width:480px;margin:40px auto;padding:24px;text-align:center;font-family:Segoe UI,Roboto,Arial,sans-serif;color:#1F2F54;background:#fff;border:1px solid #e6e9ef;border-radius:14px"><b>Nothing is switched on for your account yet.</b><br><span style="font-size:13px;color:#5b6577">Ask Ryan.</span></div>'; }
+  /* Ryan, Aug 31 PM: the welcome appears exactly ONCE, at the top of the
+     canvas. Widgets suppress their own greeting while this flag is up (they
+     keep it on standalone pages). */
+  $first = trim((string) strtok($u->display_name, ' '));
+  $html = '<style>div[id^="jaxw-"]{scroll-margin-top:72px}</style>';
+  $html .= '<div style="max-width:1080px;margin:20px auto 4px;padding:0 16px;font-family:\'Segoe UI\',Roboto,Arial,sans-serif">'
+        . '<div style="color:#C10F1B;font-weight:800;font-size:12px;letter-spacing:.12em">JAXAERO</div>'
+        . '<h1 style="font-size:28px;font-weight:800;color:#1F2F54;margin:2px 0 0">Welcome ' . esc_html($first !== '' ? $first : $u->display_name) . '!</h1>'
+        . '</div>';
+  /* Ryan, Aug 31 late: lazy canvas. A ?jaxw=<key> request returns ONLY that
+     widget, rendered through the same identity/gate path as any page load
+     (the view-as swap has already run at init). The normal request renders
+     the first widget inline and placeholders for the rest; the loader below
+     fetches them one at a time. Single-widget canvases skip all of this. */
+  $lazyReq = (isset($_GET['jaxw']) && is_string($_GET['jaxw'])) ? (string) $_GET['jaxw'] : '';
+  if ($lazyReq !== '' && count($tags) > 1) {
+    $want = array();
+    foreach (explode(',', $lazyReq) as $lk) { $lk = sanitize_key($lk); if ($lk !== '') { $want[$lk] = 1; } }
+    $out = '';
+    $GLOBALS['jaxauth_canvas_render'] = true;
+    foreach ($tags as $t) {
+      if (isset($want[$t['key']])) { $out .= '<div id="jaxw-' . esc_attr($t['key']) . '">' . do_shortcode($t['tag']) . '</div>'; }
+    }
+    unset($GLOBALS['jaxauth_canvas_render']);
+    return '<div id="jaxwLazyPayload">' . $out . '</div>';
+  }
+  $GLOBALS['jaxauth_canvas_render'] = true;
+  /* Ben, Sep-eve: multi-page Dashboard. Widgets group into Pay-Portal-style
+     tabs; one-group users keep the plain canvas exactly as before. */
+  $gmap = array('auto' => 'Revenue', 'tax' => 'Revenue', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents');
+  $gorder = array('Revenue', 'Airplanes', 'Payroll', 'My Pay', 'Safety', 'Sales & Marketing', 'MX', 'Documents');
+  $groups = array();
+  foreach ($gorder as $gl) { $groups[$gl] = array(); }
+  foreach ($tags as $t) { $gl = isset($gmap[$t['key']]) ? $gmap[$t['key']] : 'Documents'; $groups[$gl][] = $t; }
+  $groups = array_filter($groups);
+  $isDash = count($groups) > 1;
+  $lazyKeys = array();
+  $phFn = function ($t) {
+    return '<div id="jaxw-' . esc_attr($t['key']) . '" class="jaxw-lazy" data-jaxw="' . esc_attr($t['key']) . '" style="min-height:340px;display:flex;align-items:center;justify-content:center">'
+         . '<div style="font-family:\'Segoe UI\',Roboto,Arial,sans-serif;color:#8A93A5;font-size:13px;padding:40px 0">Loading ' . esc_html($t['label']) . '&hellip;</div>'
+         . '</div>';
+  };
+  if (!$isDash) {
+    foreach ($tags as $i => $t) {
+      if ($i === 0) {
+        $html .= '<div id="jaxw-' . esc_attr($t['key']) . '">' . do_shortcode($t['tag']) . '</div>';
+      } else {
+        $lazyKeys[] = $t['key'];
+        $html .= $phFn($t);
+      }
+    }
+  } else {
+    $html .= '<style>.jaxdash-tabs{display:flex;gap:8px;flex-wrap:wrap;max-width:1080px;margin:14px auto 4px;padding:0 16px;font-family:\'Segoe UI\',Roboto,Arial,sans-serif}'
+           . '.jaxdash-tab{font:700 13.5px \'Segoe UI\',Roboto,Arial,sans-serif !important;padding:9px 18px !important;border:1px solid #d9dee7 !important;background:#fff !important;border-radius:999px !important;cursor:pointer;color:#1F2F54 !important;letter-spacing:0 !important;text-transform:none !important;box-shadow:none !important;min-width:0 !important;width:auto !important;line-height:1.2 !important}'
+           . '.jaxdash-tab.on{background:#1F2F54 !important;color:#fff !important;border-color:#1F2F54 !important}'
+           . '.jaxdash-g{display:none}.jaxdash-g.on{display:block}</style>';
+    /* Ryan, Sep 2 (Tier 1): inline the SAVED tab's first widget, not always
+       group 0's - act() mirrors the shown tab into a cookie so a returning
+       Payroll user gets Payroll at first paint. Invalid/absent cookie falls
+       back to group 0, which is exactly the old behavior. */
+    $savedG = isset($_COOKIE['jaxDashTab']) ? (int) $_COOKIE['jaxDashTab'] : 0;
+    if ($savedG < 0 || $savedG >= count($groups)) { $savedG = 0; }
+    $gi = 0; $tabsH = ''; $bodyH = '';
+    foreach ($groups as $gl => $gw) {
+      $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">' . esc_html($gl) . '</button>';
+      $keysCsv = implode(',', array_map(function ($x) { return $x['key']; }, $gw));
+      $bodyH .= '<div class="jaxdash-g" id="jaxg-' . $gi . '" data-gkeys="' . esc_attr($keysCsv) . '">';
+      foreach ($gw as $j => $t) {
+        if ($gi === $savedG && $j === 0) {
+          $bodyH .= '<div id="jaxw-' . esc_attr($t['key']) . '">' . do_shortcode($t['tag']) . '</div>';
+        } else {
+          $lazyKeys[] = $t['key'];
+          $bodyH .= $phFn($t);
+        }
+      }
+      $bodyH .= '</div>';
+      $gi++;
+    }
+    if (jaxauth_is_admin($u) && !isset($groups['MX'])) {
+      $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">MX</button>';
+      $bodyH .= '<div class="jaxdash-g" id="jaxg-' . $gi . '" data-gkeys=""><div style="max-width:1080px;margin:30px auto;padding:46px 16px;text-align:center;font-family:\'Segoe UI\',Roboto,Arial,sans-serif;color:#1F2F54;background:#fff;border:1px solid #e6e9ef;border-radius:14px"><b style="font-size:20px">MX portal coming soon!</b><br><span style="font-size:13.5px;color:#5b6577">Maintenance department tools will live here.</span></div></div>';
+    }
+    $html .= '<div class="jaxdash-tabs" id="jaxdashTabs">' . $tabsH . '</div>' . $bodyH;
+    $html .= '<script>(function(){var tabs=document.querySelectorAll(".jaxdash-tab");var gs=document.querySelectorAll(".jaxdash-g");'
+      . 'function act(i){for(var x=0;x<gs.length;x++){gs[x].classList.toggle("on",x===i);}for(var x=0;x<tabs.length;x++){tabs[x].classList.toggle("on",x===i);}try{localStorage.setItem("jaxDashTab",String(i));}catch(e){}try{document.cookie="jaxDashTab="+i+";path=/;max-age=31536000;SameSite=Lax;Secure";}catch(e2){}}'
+      . 'for(var x=0;x<tabs.length;x++){(function(i){tabs[i].addEventListener("click",function(){act(i);});})(x);}'
+      . 'function byHash(){var h=(window.location.hash||"").replace("#jaxw-","");if(!h){return -1;}for(var x=0;x<gs.length;x++){var ks=(gs[x].getAttribute("data-gkeys")||"").split(",");if(ks.indexOf(h)>-1){return x;}}return -1;}'
+      . 'var st=0;try{st=parseInt(localStorage.getItem("jaxDashTab")||"0",10)||0;}catch(e){}if(st<0||st>=gs.length){st=0;}'
+      . 'var hi=byHash();act(hi>-1?hi:st);'
+      . 'window.addEventListener("hashchange",function(){var i=byHash();if(i>-1){act(i);var el=document.getElementById("jaxw-"+((window.location.hash||"").replace("#jaxw-","")));if(el){el.scrollIntoView();}}});'
+      . '})();</script>';
+  }
+  unset($GLOBALS['jaxauth_canvas_render']);
+  if ($lazyKeys) {
+    /* Ryan, Sep 2 (Tier 1): the loader now runs TWO fetches at once, batches
+       every hidden-tab widget into one comma-list request (one WP boot
+       instead of one per widget), starts at DOMContentLoaded instead of
+       window load, and a tab click promotes that group's keys to the front.
+       A batch that comes back missing a widget re-queues those keys once as
+       single fetches (covers the fallback path, which also parses commas). */
+    $html .= '<script>(function(){'
+      . 'var KEYS=' . wp_json_encode(array_values($lazyKeys)) . ';var MAX=2;var inflight=0;var failed={};'
+      . 'function runScripts(root){var ss=root.querySelectorAll("script");for(var i=0;i<ss.length;i++){var o=ss[i];var n=document.createElement("script");if(o.src){n.src=o.src;}else{n.text=o.text;}o.parentNode.replaceChild(n,o);}}'
+      . 'function phOf(key){return document.querySelector(".jaxw-lazy[data-jaxw=\""+key+"\"]");}'
+      . 'function hiddenKey(key){var ph=phOf(key);if(!ph||!ph.closest){return false;}var g=ph.closest(".jaxdash-g");return !!(g&&!g.classList.contains("on"));}'
+      . 'var singles=[],batch=[];KEYS.forEach(function(k){(hiddenKey(k)?batch:singles).push(k);});'
+      . 'var queue=singles.map(function(k){return [k];});if(batch.length){queue.push(batch.slice());}'
+      . 'function markErr(key,msg){var ph=phOf(key);if(ph&&ph.firstElementChild){ph.firstElementChild.textContent=msg;}}'
+      . 'function insertOne(pay,key){var ph=phOf(key);if(!ph){return true;}var w=pay.querySelector("[id=\"jaxw-"+key+"\"]");if(!w){return false;}var node=document.importNode(w,true);ph.parentNode.replaceChild(node,ph);runScripts(node);return true;}'
+      . 'function load(keys,done){'
+      . 'fetch(window.location.pathname+"?jaxw="+encodeURIComponent(keys.join(",")),{credentials:"same-origin"}).then(function(r){return r.text();}).then(function(t){'
+      . 'var doc=new DOMParser().parseFromString(t,"text/html");var pay=doc.getElementById("jaxwLazyPayload");'
+      . 'var missing=[];keys.forEach(function(k){if(!(pay&&insertOne(pay,k))){missing.push(k);}});'
+      . 'missing.forEach(function(k){if(keys.length>1&&!failed[k]){failed[k]=1;queue.unshift([k]);}else{markErr(k,"This section could not load - pull to refresh or reload the page.");}});'
+      . 'done();'
+      . '}).catch(function(){keys.forEach(function(k){if(keys.length>1&&!failed[k]){failed[k]=1;queue.unshift([k]);}else{markErr(k,"This section could not load - check the connection and reload.");}});done();});}'
+      . 'function next(){while(inflight<MAX&&queue.length){var ks=queue.shift();inflight++;load(ks,function(){inflight--;next();});}}'
+      . 'function promote(key){for(var i=0;i<queue.length;i++){var ix=queue[i].indexOf(key);if(ix>-1){if(queue[i].length===1){if(i>0){var it=queue.splice(i,1)[0];queue.unshift(it);}return;}queue[i].splice(ix,1);if(!queue[i].length){queue.splice(i,1);}queue.unshift([key]);return;}}}'
+      . 'if("IntersectionObserver" in window){var io=new IntersectionObserver(function(es){var any=false;es.forEach(function(e){if(e.isIntersecting){promote(e.target.getAttribute("data-jaxw"));io.unobserve(e.target);any=true;}});if(any){next();}},{rootMargin:"600px 0px"});'
+      . 'document.querySelectorAll(".jaxw-lazy").forEach(function(el){io.observe(el);});}'
+      . 'var tabsEl=document.getElementById("jaxdashTabs");'
+      . 'if(tabsEl){tabsEl.addEventListener("click",function(ev){var b=ev.target&&ev.target.closest?ev.target.closest(".jaxdash-tab"):null;if(!b){return;}var g=document.getElementById("jaxg-"+b.getAttribute("data-g"));if(!g){return;}var ks=(g.getAttribute("data-gkeys")||"").split(",");for(var i=ks.length-1;i>=0;i--){if(ks[i]){promote(ks[i]);}}next();});}'
+      . 'function kick(){setTimeout(next,150);}'
+      . 'if(document.readyState==="interactive"||document.readyState==="complete"){kick();}else{document.addEventListener("DOMContentLoaded",kick);}'
+      . '})();</script>';
+  }
+  return $html;
+});
+
+/* -------------------- portal menu (Ryan, Aug 25) --------------------
+ * A hamburger on every front-end page for signed-in portal users: their
+ * pages, the admin panel for admins, change password, request help, sign
+ * out. Anonymous visitors and non-portal users never see it. */
+add_action('wp_footer', 'jaxauth_menu_footer');
+function jaxauth_menu_footer() {
+  static $done = false;
+  if ($done || is_admin()) { return; }
+  $u = wp_get_current_user();
+  if (!$u || !$u->exists()) { return; }
+  if (!jaxauth_is_managed($u) && !jaxauth_is_admin($u)) { return; }
+  $done = true;
+  /* Ryan, Aug 31: the pane is four doors, not a site map - My Data (your User
+     Canvas), User Preferences, Get Help, and Admin Portal for admins. The old
+     every-page list tripled "Aircraft owner statements" as soon as the canvas
+     pages mapped to ownerstmt. */
+  $myData = jaxauth_default_dest($u);
+  $adminUrl = '';
+  if (jaxauth_is_admin($u)) {
+    $pgs = get_option('jaxauth_pages', []);
+    if (is_array($pgs)) {
+      foreach ($pgs as $pid => $key) {
+        if ($key === 'access' && get_post_status($pid) === 'publish') { $l = get_permalink($pid); if ($l) { $adminUrl = $l; } }
+      }
+    }
+  }
+  $homeP = get_option('jaxauth_signin_page');
+  $home = $homeP ? get_permalink($homeP) : home_url('/');
+  $restOut = esc_url(rest_url('jaxauth/v1/logout'));
+  $nonce = wp_create_nonce('wp_rest');
+  /* Ben (Sep-eve doc, Ryan confirmed): widget links are back in the pane,
+     above Home. On the canvas a link's hash activates the matching tab. */
+  $mnuW = array();
+  $cvsP = (int) get_option('jaxauth_canvas_page');
+  $cvsUrl = ($cvsP && get_post_status($cvsP) === 'publish') ? get_permalink($cvsP) : '';
+  if ($cvsUrl) { $mnuW = jaxauth_canvas_widgets($u); }
+  ?>
+<style>
+.jaxmnu-btn{position:fixed;top:12px;right:12px;z-index:99990;width:42px !important;height:42px !important;min-width:0 !important;border-radius:10px !important;border:1px solid #d9dee7 !important;background:#fff !important;box-shadow:0 2px 10px rgba(20,35,70,.18) !important;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 !important;line-height:1 !important}
+.jaxmnu-btn span{display:block;width:18px;height:2px;background:#1F2F54;border-radius:2px;position:relative}
+.jaxmnu-btn span:before,.jaxmnu-btn span:after{content:'';position:absolute;left:0;width:18px;height:2px;background:#1F2F54;border-radius:2px}
+.jaxmnu-btn span:before{top:-6px}.jaxmnu-btn span:after{top:6px}
+.jaxmnu-pane{position:fixed;top:60px;right:12px;z-index:99990;width:min(300px,calc(100vw - 24px));background:#fff;border:1px solid #e6e9ef;border-radius:14px;box-shadow:0 14px 44px rgba(15,23,42,.28);display:none;overflow:hidden;font-family:"Segoe UI",Roboto,Arial,sans-serif}
+.jaxmnu-pane.on{display:block}
+body.admin-bar .jaxmnu-btn{top:44px}body.admin-bar .jaxmnu-pane{top:92px}
+.jaxmnu-hd{padding:12px 16px 10px;border-bottom:1px solid #eef1f5;font-weight:800;color:#C10F1B;font-size:12px;letter-spacing:.12em}
+.jaxmnu-pane a,.jaxmnu-pane button.jaxmnu-item{display:block !important;width:100% !important;min-width:0 !important;text-align:left !important;background:none !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;padding:11px 16px !important;font:inherit !important;font-size:14px !important;font-weight:400 !important;color:#1F2F54 !important;text-decoration:none !important;letter-spacing:0 !important;text-transform:none !important;cursor:pointer}
+.jaxmnu-pane a:hover,.jaxmnu-pane button.jaxmnu-item:hover{background:#F4F6F9 !important;color:#1F2F54 !important}
+.jaxmnu-sep{border-top:1px solid #eef1f5;margin:4px 0}
+.jaxmnu-help{display:none;padding:10px 16px 14px}
+.jaxmnu-help.on{display:block}
+.jaxmnu-help textarea{width:100% !important;min-height:76px;font:inherit !important;font-size:13.5px !important;padding:8px 10px !important;border:1px solid #d9dee7 !important;border-radius:8px !important;background:#fff !important;color:#1F2F54 !important;box-sizing:border-box !important}
+.jaxmnu-help .jaxmnu-send{margin-top:8px;background:#1F2F54 !important;color:#fff !important;border:0 !important;border-radius:8px !important;box-shadow:none !important;width:auto !important;min-width:0 !important;padding:8px 16px !important;font:inherit !important;font-size:13px !important;font-weight:700 !important;letter-spacing:0 !important;text-transform:none !important;cursor:pointer}
+.jaxmnu-note{font-size:12px;padding:0 16px 10px;color:#5b6577}
+</style>
+<button type="button" class="jaxmnu-btn" id="jaxmnuBtn" aria-label="Menu" aria-expanded="false"><span></span></button>
+<div class="jaxmnu-pane" id="jaxmnuPane" role="menu">
+  <div class="jaxmnu-hd">JAXAERO</div>
+  <?php foreach ($mnuW as $mw) { ?><a href="<?php echo esc_url($cvsUrl . '#jaxw-' . $mw['key']); ?>"><?php echo esc_html($mw['label']); ?></a><?php } ?>
+  <?php if ($mnuW) { ?><div class="jaxmnu-sep"></div><?php } ?>
+  <a href="<?php echo esc_url($myData); ?>">Home</a>
+  <a href="<?php echo esc_url(add_query_arg('settings', '1', $home)); ?>">Settings</a>
+  <button type="button" class="jaxmnu-item" id="jaxmnuHelpBtn">Help</button>
+  <div class="jaxmnu-help" id="jaxmnuHelp">
+    <textarea id="jaxmnuHelpTxt" placeholder="What do you need help with?"></textarea>
+    <button type="button" class="jaxmnu-send" id="jaxmnuHelpSend">Send to Ryan</button>
+  </div>
+  <div class="jaxmnu-note" id="jaxmnuNote" style="display:none"></div>
+  <?php if ($adminUrl !== '') { ?><div class="jaxmnu-sep"></div><a href="<?php echo esc_url($adminUrl); ?>">Admin Portal</a><?php } ?>
+  <div class="jaxmnu-sep"></div>
+  <button type="button" class="jaxmnu-item" id="jaxmnuOut">Sign off</button>
+</div>
+<script>
+(function(){
+  var OUTU=<?php echo wp_json_encode($restOut); ?>,MN=<?php echo wp_json_encode($nonce); ?>,HOMEU=<?php echo wp_json_encode(esc_url($home)); ?>,LOUT=<?php echo wp_json_encode(esc_url_raw(wp_specialchars_decode(wp_logout_url($home)))); ?>;
+  var btn=document.getElementById('jaxmnuBtn'),pane=document.getElementById('jaxmnuPane');
+  if(!btn||!pane){return;}
+  btn.addEventListener('click',function(e){e.stopPropagation();var on=pane.classList.toggle('on');btn.setAttribute('aria-expanded',on?'true':'false');});
+  document.addEventListener('click',function(e){if(pane.classList.contains('on')&&!pane.contains(e.target)&&e.target!==btn){pane.classList.remove('on');}});
+  pane.addEventListener('click',function(e){var a=e.target.closest?e.target.closest('a'):null;if(a){pane.classList.remove('on');}});
+  window.addEventListener('keydown',function(e){if(e.key==='Escape'){pane.classList.remove('on');}});
+  var hb=document.getElementById('jaxmnuHelpBtn'),hp=document.getElementById('jaxmnuHelp'),hn=document.getElementById('jaxmnuNote');
+  if(hb&&hp){hb.addEventListener('click',function(){hp.classList.toggle('on');});}
+  var hs=document.getElementById('jaxmnuHelpSend');
+  if(hs){hs.addEventListener('click',function(){
+    var tx=document.getElementById('jaxmnuHelpTxt');
+    var v=tx&&tx.value?tx.value.replace(/^\s+|\s+$/g,''):'';
+    if(!v){if(hn){hn.textContent='Say a few words about what you need.';hn.style.display='block';}return;}
+    hs.disabled=true;
+    fetch(<?php echo wp_json_encode(esc_url_raw(rest_url('jaxauth/v1/help'))); ?>,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-WP-Nonce':MN},body:JSON.stringify({message:v,page:window.location.href})})
+      .then(function(r){return r.json().catch(function(){return {};});})
+      .then(function(j){hs.disabled=false;if(hn){hn.textContent=(j&&j.ok)?'Sent - Ryan will get back to you.':((j&&j.message)?j.message:'Could not send - try again in a minute.');hn.style.display='block';}if(j&&j.ok&&tx){tx.value='';hp.classList.remove('on');}})
+      .catch(function(){hs.disabled=false;if(hn){hn.textContent='Could not send - check the connection.';hn.style.display='block';}});
+  });}
+  document.getElementById('jaxmnuOut').addEventListener('click',function(){
+    fetch(OUTU,{method:'POST',credentials:'same-origin',headers:{'X-WP-Nonce':MN}}).then(function(r){if(r.ok){location=HOMEU;}else{location=LOUT;}}).catch(function(){location=LOUT;});
+  });
+})();
+</script>
+  <?php
+}
+
 /* -------------------- shared iframe wrapper -------------------- */
 
 /* body.scrollHeight, never documentElement (the K10 ratchet lesson). */
@@ -472,7 +1268,12 @@ function jaxauth_iframe($html, $fid, $title) {
      delayed or killed (WP Rocket delay-JS), the frame scrolls internally
      instead of hard-clipping the buttons below the fold. When the listener
      runs, the height is exact and no scrollbar shows. */
-  return '<div style="display:block;width:100%;margin:0;padding:0;line-height:0">'
+  /* Ryan, Aug 24 (KJ mobile test): on phones the theme's page template offsets
+     its content container, clipping the frame's left edge. Below 700px the
+     wrapper full-bleeds to the real viewport (100vw self-centered), immune to
+     whatever margins the theme applies. Desktop keeps the contained layout. */
+  return '<style>@media(max-width:700px){#' . esc_attr($fid) . '_w{width:100vw !important;position:relative;left:50%;margin-left:-50vw !important}}</style>'
+    . '<div id="' . esc_attr($fid) . '_w" style="display:block;width:100%;margin:0;padding:0;line-height:0">'
     . '<iframe id="' . esc_attr($fid) . '" srcdoc="' . esc_attr($html) . '" '
     . 'style="display:block;width:100%;height:1100px;border:0;margin:0;overflow:auto" '
     . 'title="' . esc_attr($title) . '"></iframe></div>'
@@ -500,10 +1301,6 @@ function jaxauth_frame_head() {
     . '.okmsg{display:none;background:#e3f5ec;border:1px solid #bfe8d2;color:#0f7a4d;border-radius:9px;padding:10px 12px;font-size:13.5px;margin-bottom:12px}'
     . '.okmsg.on{display:block}'
     . '.note{background:#fdf3e2;border:1px solid #f0dcb2;color:#8a5b00;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:12px}'
-    . '.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}'
-    . '.card{display:block;background:#fff;border:1px solid #e6e9ef;border-radius:12px;padding:16px;text-decoration:none;color:#1F2F54}'
-    . '.card:hover{border-color:#C0A788}'
-    . '.card b{font-size:15px}.card span{display:block;font-size:12.5px;color:#5b6577;margin-top:3px}'
     . '.small{font-size:12.5px;color:#5b6577}'
     . 'table{width:100%;border-collapse:collapse}'
     . 'th{text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#8b93a3;font-weight:700;padding:7px 9px;border-bottom:1px solid #e6e9ef}'
@@ -519,6 +1316,7 @@ function jaxauth_frame_head() {
     . '.tg{position:relative;width:42px;height:24px;border-radius:999px;border:0;cursor:pointer;background:#cfd5df}'
     . '.tg:after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.18)}'
     . '.tg.on{background:#0f7a4d}.tg.on:after{left:21px}'
+    . '.hstar{background:none;border:0;cursor:pointer;font:inherit;font-size:16px;line-height:1;color:#c8cfda;padding:0 3px;margin-left:4px;vertical-align:middle}.hstar.on{color:#E8A100}'
     . '.arow{display:flex;gap:12px;padding:8px 2px;border-top:1px solid #e6e9ef;font-size:13px}'
     . '.arow time{flex:none;width:120px;color:#8b93a3;font-size:12px}'
     . '</style></head><body>';
@@ -569,7 +1367,7 @@ function jaxauth_login_html() {
       body:JSON.stringify({email:document.getElementById('em').value.trim(),password:document.getElementById('pw').value})})
     .then(function(r){return r.json().then(function(j){return {s:r.status,j:j};});})
     .then(function(x){
-      if(x.s===200&&x.j&&x.j.ok){if(window.parent!==window){window.parent.location.reload();}else{location.reload();}return;}
+      if(x.s===200&&x.j&&x.j.ok){var w=(window.parent!==window)?window.parent:window;var d=x.j.dest||'';if(d&&!x.j.mustChange){w.location=d;}else{w.location.reload();}return;}
       fail(x.j&&x.j.message?x.j.message:'That email and password combination did not work.');
     })
     .catch(function(){fail('Could not reach the site. Check your connection and try again.');});
@@ -587,32 +1385,21 @@ function jaxauth_home_html($u) {
   $restOut = esc_url_raw(rest_url('jaxauth/v1/logout'));
   $nonce   = wp_create_nonce('wp_rest');
   $must    = get_user_meta($u->ID, 'jaxauth_must_change', true) === '1';
-  $reg     = jaxauth_registry();
-  $pages   = get_option('jaxauth_pages', []);
-  $cards   = [];
-  if (is_array($pages)) {
-    foreach ($pages as $pid => $key) {
-      if ($key === '' || !isset($reg[$key])) { continue; }
-      if (!jaxauth_can($key, $u->ID)) { continue; }
-      if ($key === 'pay') { continue; }
-      $cards[] = ['t' => $reg[$key][0], 'd' => $reg[$key][1], 'u' => get_permalink($pid)];
-    }
-  }
+  $chpw    = isset($_GET['chpw']);
+  /* Ryan, Aug 31: the widget selector (cards + home-screen stars) is gone for
+     everyone - landing is the User Canvas and navigation is My Data in the menu.
+     This screen is preferences only: password, help, sign out. The stored
+     jaxauth_home pref still routes for anyone who set one; only its UI left. */
   ob_start(); ?>
 <?php echo jaxauth_frame_head(); ?>
+
 <div class="wrap">
   <span class="brand">JAXAERO</span>
   <h1>Welcome, <?php echo esc_html($u->display_name); ?></h1>
-  <div class="sub">Everything your account can open. Signed in as <?php echo esc_html($u->user_email); ?>.
-    <button class="btn ghost" id="out" style="padding:4px 12px;font-size:12px;margin-left:8px">Sign out</button></div>
+  <div class="sub">Your account preferences. Signed in as <?php echo esc_html($u->user_email); ?>.
+    <button class="btn ghost" id="out" style="padding:9px 16px;font-size:13px;margin-left:8px;vertical-align:middle">Sign out</button></div>
   <?php if ($must) { ?><div class="note"><b>Please choose a new password now.</b> The one you signed in with was temporary.</div><?php } ?>
-  <?php if (count($cards) === 0) { ?><div class="mod small">No pages are enabled for your account yet. Ask Ryan.</div><?php } ?>
-  <div class="cards">
-  <?php foreach ($cards as $c) { ?>
-    <a class="card" href="<?php echo esc_url($c['u']); ?>"><b><?php echo esc_html($c['t']); ?></b><span><?php echo esc_html($c['d']); ?></span></a>
-  <?php } ?>
-  </div>
-  <div class="mod" style="margin-top:16px;max-width:430px">
+  <div class="mod" id="chpw" style="margin-top:16px;max-width:430px">
     <b>Change your password</b>
     <div class="small" style="margin-bottom:10px">At least <?php echo (int) JAXAUTH_MIN_PW; ?> characters. Takes effect immediately.</div>
     <div class="err" id="perr"></div><div class="okmsg" id="pok">Password changed.</div>
@@ -621,10 +1408,19 @@ function jaxauth_home_html($u) {
     <div class="fld"><label for="nw2">New password again</label><input id="nw2" type="password" autocomplete="new-password"></div>
     <button class="btn" id="pgo">Change password</button>
   </div>
+  <div class="mod" id="helpmod" style="margin-top:16px;max-width:430px">
+    <b>Request help</b>
+    <div class="small" style="margin-bottom:10px">Describe the problem - this goes straight to Ryan by email.</div>
+    <div class="err" id="herr"></div><div class="okmsg" id="hok">Sent - Ryan has it in his inbox.</div>
+    <div class="fld"><textarea id="htxt" rows="4" style="width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;padding:8px 10px;border:1px solid #d9dee7;border-radius:8px" placeholder="What is going wrong?"></textarea></div>
+    <button class="btn" id="hgo">Send to Ryan</button>
+  </div>
 </div>
 <script>
 (function(){
   var PW=<?php echo wp_json_encode($restPw); ?>,OUT=<?php echo wp_json_encode($restOut); ?>,N=<?php echo wp_json_encode($nonce); ?>;
+  var HLP=<?php echo wp_json_encode(esc_url_raw(rest_url('jaxauth/v1/help'))); ?>;
+  var MUSTN=<?php echo $must ? 'true' : 'false'; ?>,CHW=<?php echo $chpw ? 'true' : 'false'; ?>;
   var perr=document.getElementById('perr'),pok=document.getElementById('pok'),pgo=document.getElementById('pgo');
   function pfail(m){perr.textContent=m;perr.classList.add('on');pgo.disabled=false;}
   document.getElementById('pgo').addEventListener('click',function(){
@@ -637,7 +1433,10 @@ function jaxauth_home_html($u) {
     .then(function(r){return r.json().then(function(j){return {s:r.status,j:j};});})
     .then(function(x){
       if(x.s===200&&x.j&&x.j.ok){pok.classList.add('on');pgo.disabled=false;
-        document.getElementById('cur').value='';document.getElementById('nw').value='';document.getElementById('nw2').value='';return;}
+        document.getElementById('cur').value='';document.getElementById('nw').value='';document.getElementById('nw2').value='';
+        var nt=document.querySelector('.note');if(nt){nt.style.display='none';}
+        if(MUSTN&&x.j.dest){setTimeout(function(){var w=(window.parent!==window)?window.parent:window;w.location=x.j.dest;},900);}
+        return;}
       pfail(x.j&&x.j.message?x.j.message:'That did not work.');
     })
     .catch(function(){pfail('Could not reach the site.');});
@@ -646,6 +1445,20 @@ function jaxauth_home_html($u) {
     fetch(OUT,{method:'POST',credentials:'same-origin',headers:{'X-WP-Nonce':N}})
     .then(function(){if(window.parent!==window){window.parent.location.reload();}else{location.reload();}});
   });
+  if(CHW){setTimeout(function(){var m=document.getElementById('chpw');if(m){m.scrollIntoView({block:'start'});}var c=document.getElementById('cur');if(c){c.focus({preventScroll:true});}},350);}
+  var hgo=document.getElementById('hgo');
+  if(hgo){hgo.addEventListener('click',function(){
+    var herr=document.getElementById('herr'),hok=document.getElementById('hok'),t=document.getElementById('htxt');
+    herr.classList.remove('on');hok.classList.remove('on');
+    if(!t.value.trim()){herr.textContent='Describe the problem first.';herr.classList.add('on');return;}
+    hgo.disabled=true;
+    fetch(HLP,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-WP-Nonce':N},body:JSON.stringify({message:t.value,page:'user settings page'})})
+    .then(function(r){return r.json().then(function(j){return {s:r.status,j:j};});})
+    .then(function(x){hgo.disabled=false;
+      if(x.s===200&&x.j&&x.j.ok){t.value='';hok.classList.add('on');return;}
+      herr.textContent=(x.j&&x.j.message)?x.j.message:'Could not send - call or text Ryan.';herr.classList.add('on');})
+    .catch(function(){hgo.disabled=false;herr.textContent='Could not reach the site.';herr.classList.add('on');});
+  });}
 })();
 </script>
 <?php echo jaxauth_frame_foot();
@@ -673,12 +1486,14 @@ function jaxauth_admin_html() {
       'b' => (string) get_user_meta($wu->ID, 'jaxauth_instructor', true),
       'd' => !jaxauth_enabled($wu->ID),
       'ac' => array_values((array) get_user_meta($wu->ID, 'jaxown_aircraft', true)),
+      'hm' => (string) get_user_meta($wu->ID, 'jaxauth_home', true),
     ];
   }
   $acd0 = get_option('jaxac_data_last', array());
   $acTails = (is_array($acd0) && !empty($acd0['fleet']) && is_array($acd0['fleet']))
     ? array_keys($acd0['fleet']) : array('N768SP', 'N146F', 'N1196M', 'N234ZG', 'N9711S');
   $slugs = array_keys((array) get_option('jaxpay_instructors', []));
+  $pageKeys = array_values(array_diff(array_unique(array_intersect(array_values((array) get_option('jaxauth_pages', [])), array_keys($reg))), ['access']));
   $log = get_option('jaxauth_log', []);
   if (!is_array($log)) { $log = []; }
   $log = array_slice($log, 0, 40);
@@ -688,6 +1503,15 @@ function jaxauth_admin_html() {
   $aiNote = $aiKey !== '' ? ('An Anthropic API key has been added (ends ' . substr($aiKey, -4) . ($aiAt !== '' ? ', saved ' . $aiAt : '') . ').') : '';
   ob_start(); ?>
 <?php echo jaxauth_frame_head(); ?>
+<style>
+.arow>span{min-width:0;overflow-wrap:anywhere}
+@media(max-width:700px){
+.tg{width:58px;height:40px;border:8px solid transparent;background-clip:padding-box}
+.hstar{font-size:22px;padding:9px 12px;margin-left:2px}
+#addU{padding:12px 14px !important}
+#dd{width:24px;height:24px}
+}
+</style>
 <div class="wrap">
   <span class="brand">JAXAERO</span>
   <h1>Access admin</h1>
@@ -701,27 +1525,52 @@ function jaxauth_admin_html() {
     <div class="mod">
       <div class="err" id="aerr"></div><div class="okmsg" id="aok">Saved.</div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;border-bottom:1px solid #e6e9ef;padding-bottom:14px;margin-bottom:14px">
-        <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Name</label><input id="dn" readonly></div>
+        <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Name</label><input id="dn" autocomplete="off"></div>
         <div class="fld" style="flex:1;min-width:170px;margin:0"><label>Email</label><input id="de" readonly></div>
-        <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Instructor binding</label><select id="db"></select></div>
+        <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Pay page binding</label><select id="db"></select></div>
         <label class="small" style="display:flex;align-items:center;gap:6px;padding-bottom:4px"><input type="checkbox" id="dd"> Disabled</label>
         <button class="btn ghost" id="resetPw" style="font-size:12.5px">Reset password</button>
+        <button class="btn ghost" id="viewAs" style="font-size:12.5px">View as user</button>
+        <button class="btn ghost" id="delU" style="font-size:12.5px;color:#C0161C;border-color:#e3b3b6">Delete user</button>
       </div>
       <div style="overflow-x:auto"><table id="mx">
         <tr><th>Widget</th><th></th><th style="width:48px">On</th></tr>
       </table></div>
+      <div class="small" style="margin:10px 2px 0">&#9733; marks this person's home screen - the page they land on right after signing in. Turn a widget on, then click its star; click it again to return to the default (staff land on Revenue - AUTO, aircraft owners on My Aircraft). "View as user" opens a new tab showing the portal exactly as they see it; the banner at the bottom of that view ends the 15-minute preview.</div>
       <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;border-top:1px solid #e6e9ef;margin-top:12px;padding-top:14px">
         <button class="btn" id="save">Save access</button></div>
     </div>
   </div>
+  <div class="mod" id="fqamod">
+    <b>FOQA safety deck</b>
+    <div class="small" style="margin-bottom:8px">Drop Kasen's monthly .pptx to update the instructor safety panel. Parsed and shown to you before anything is saved. <span id="fqamonths"></span></div>
+    <div id="fqaZone" style="border:2px dashed #d9dee7;border-radius:9px;background:#fafbfd;padding:14px;text-align:center;cursor:pointer;font-size:13px">
+      <b>Drop the .pptx here</b> <span style="color:#6b7488">or click to choose</span>
+      <input type="file" id="fqaFile" accept=".pptx" style="display:none">
+    </div>
+    <div id="fqaMsg" class="small" style="margin-top:8px;font-weight:700;min-height:16px"></div>
+    <div id="fqaOut" class="small" style="margin-top:6px;display:none"></div>
+  </div>
   <div class="mod">
-    <b>AI document intake</b>
-    <div class="small" style="margin-bottom:8px">Anthropic API key for the invoice-reading feature. Stored server-side only and never displayed again after saving. Status: <span id="aist"><?php echo esc_html($aiSet); ?></span></div>
+    <b>Anthropic API key &mdash; key only</b>
+    <div class="small" style="margin-bottom:8px">This box takes ONLY the Anthropic API key that powers invoice reading. It is not a place to upload documents. Stored server-side and never shown again after saving. Status: <span id="aist"><?php echo esc_html($aiSet); ?></span></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <input type="password" id="aikey" placeholder="sk-ant-..." autocomplete="off" style="flex:1;min-width:220px;font:inherit;padding:8px 10px;border:1px solid #d9dee7;border-radius:8px">
       <button class="btn" id="aisave" style="font-size:13px">Save key</button>
     </div>
     <div id="ainote" class="small" style="margin-top:8px;font-weight:700;color:#1E7C46;<?php echo $aiNote === '' ? 'display:none' : ''; ?>"><?php echo esc_html($aiNote); ?></div>
+  </div>
+  <div id="pwov" style="display:none;position:fixed;inset:0;background:rgba(15,29,61,.5);z-index:99;align-items:flex-start;justify-content:center;padding:96px 16px 16px">
+    <div style="background:#fff;border-radius:12px;padding:20px;max-width:430px;width:100%;box-shadow:0 14px 44px rgba(15,23,42,.35)">
+      <b id="pwtitle">Temporary password</b>
+      <div class="small" style="margin:6px 0 10px">Shown once. Hand it over out of band - the site never emails it. A new password is required at first sign-in.</div>
+      <div style="display:flex;gap:8px">
+        <input id="pwval" readonly autocomplete="off" style="flex:1;font-family:Consolas,Menlo,monospace;font-size:15px;padding:9px 10px;border:1px solid #d9dee7;border-radius:8px">
+        <button class="btn" id="pwcopy" type="button">Copy</button>
+      </div>
+      <div class="small" id="pwcopied" style="color:#1E7C46;font-weight:700;margin-top:6px;display:none">Copied to clipboard.</div>
+      <div style="text-align:right;margin-top:10px"><button class="btn ghost" id="pwclose" type="button">Close</button></div>
+    </div>
   </div>
   <div class="mod">
     <b>Audit log</b>
@@ -736,8 +1585,10 @@ function jaxauth_admin_html() {
   var USERS=<?php echo wp_json_encode($users); ?>;
   var SLUGS=<?php echo wp_json_encode($slugs); ?>;
   var ACTAILS=<?php echo wp_json_encode($acTails); ?>;
+  var PKEYS=<?php echo wp_json_encode($pageKeys); ?>;
   var LOG=<?php echo wp_json_encode($log); ?>;
   var sel=USERS.length?USERS[0].id:0;
+  var hmPend='';
   var aerr=document.getElementById('aerr'),aok=document.getElementById('aok');
   function api(path,body){
     return fetch(REST+path,{method:'POST',credentials:'same-origin',
@@ -749,6 +1600,59 @@ function jaxauth_admin_html() {
   var aisaveBtn=document.getElementById('aisave');
   if(aisaveBtn){aisaveBtn.addEventListener('click',function(){
     aerr.classList.remove('on');
+  /* ---- FOQA deck upload. srcdoc-safe: block comments only, no closing script
+     tag in any string. Calls the routes registered by snippet 17. ---- */
+  (function(){
+    var z=document.getElementById('fqaZone'),fi=document.getElementById('fqaFile'),
+        ms=document.getElementById('fqaMsg'),ou=document.getElementById('fqaOut'),
+        mo=document.getElementById('fqamonths');
+    if(!z){return;}
+    var BASE=(location.origin||'')+'/wp-json/jaxfoqa/v1/';
+    var parsed=null;
+    function say(t,c){ms.textContent=t||'';ms.style.color=c==='e'?'#C0161C':(c==='k'?'#1E7C46':'#44506a');}
+    function esc(s){return String(s).replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];});}
+    z.addEventListener('click',function(){fi.click();});
+    ['dragenter','dragover'].forEach(function(e){z.addEventListener(e,function(ev){ev.preventDefault();ev.stopPropagation();z.style.borderColor='#B9822B';z.style.background='#fffaf0';});});
+    ['dragleave','drop'].forEach(function(e){z.addEventListener(e,function(ev){ev.preventDefault();ev.stopPropagation();z.style.borderColor='#d9dee7';z.style.background='#fafbfd';});});
+    z.addEventListener('drop',function(ev){if(ev.dataTransfer&&ev.dataTransfer.files.length){go(ev.dataTransfer.files[0]);}});
+    fi.addEventListener('change',function(){if(fi.files.length){go(fi.files[0]);}});
+    function go(file){
+      if(!/\.pptx$/i.test(file.name)){say('That is not a .pptx file.','e');return;}
+      say('Reading '+file.name+'...');ou.style.display='none';
+      var fd=new FormData();fd.append('file',file);
+      fetch(BASE+'upload',{method:'POST',credentials:'same-origin',headers:{'X-WP-Nonce':NONCE},body:fd})
+        .then(function(r){return r.json();})
+        .then(function(j){
+          if(!j||!j.ok){say((j&&j.err)?j.err:'Could not read that file.','e');return;}
+          parsed=j.parsed;show(j.parsed);say('');
+        }).catch(function(){say('Upload failed.','e');});
+    }
+    function show(p){
+      var fo=p.found||{},mi=p.missing||[],h='';
+      h+='<b>'+esc(fo.label||'Month not found')+'</b> &middot; '+p.slideCount+' slides';
+      if(fo.cre_tier_2000!=null){h+='<br>Traffic proximity: '+fo.cre_tier_2000+' / '+(fo.cre_tier_1000!=null?fo.cre_tier_1000:'-')+' / '+(fo.cre_tier_500!=null?fo.cre_tier_500:'-')+' (2000/1000/500 ft)';}
+      if(fo.braking_avg!=null){h+='<br>Braking: '+fo.braking_avg+' G';}
+      if(fo.go_around_pct!=null){h+='<br>Go-around: '+fo.go_around_pct+'%';}
+      if(mi.length){h+='<br><span style="color:#B9822B">Not found: '+esc(mi.join('; '))+'. Nothing saved yet.</span>';}
+      h+='<br><button type="button" class="btn" id="fqaSave" style="font-size:13px;margin-top:8px"'+(fo.month_key?'':' disabled')+'>Save '+esc(fo.label||'')+'</button>';
+      ou.innerHTML=h;ou.style.display='';
+      var b=document.getElementById('fqaSave');if(b){b.addEventListener('click',save);}
+    }
+    function save(){
+      if(!parsed||!parsed.found||!parsed.found.month_key){return;}
+      var b=document.getElementById('fqaSave');if(b){b.disabled=true;}
+      say('Saving...');
+      fetch(BASE+'save-month',{method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json','X-WP-Nonce':NONCE},
+        body:JSON.stringify({month_key:parsed.found.month_key,month:parsed.found})})
+        .then(function(r){return r.json();})
+        .then(function(j){
+          if(j&&j.ok){say('Saved '+parsed.found.label+'. Instructors see it now.','k');if(mo){mo.textContent='Loaded: '+j.months.join(', ');}}
+          else{say((j&&j.err)?j.err:'Could not save.','e');if(b){b.disabled=false;}}
+        }).catch(function(){say('Could not save.','e');if(b){b.disabled=false;}});
+    }
+  })();
+
     var v=document.getElementById('aikey').value.trim();
     if(!v){fail('Paste the key first.');return;}
     api('admin/ai-key',{key:v}).then(function(r){
@@ -771,6 +1675,7 @@ function jaxauth_admin_html() {
   }
   function renderDetail(){
     var u=cur();if(!u){return;}
+    hmPend=u.hm||'';
     document.getElementById('dn').value=u.n;
     document.getElementById('de').value=u.e;
     var db=document.getElementById('db');db.innerHTML='';
@@ -781,9 +1686,10 @@ function jaxauth_admin_html() {
     var mx=document.getElementById('mx');
     mx.innerHTML='<tr><th>Widget</th><th></th><th style="width:48px">On</th></tr>';
     Object.keys(REG).forEach(function(k){
-      if(k==='owner'){return;}
+      if(k==='owner'||k==='access'){return;}
       var tr=document.createElement('tr');
-      tr.innerHTML='<td><b>'+esc(REG[k][0])+'</b></td><td class="small">'+esc(REG[k][1])+'</td>'
+      var starBtn=(PKEYS.indexOf(k)>=0)?('<button class="hstar'+(hmPend===k?' on':'')+'" data-hk="'+esc(k)+'" title="Make this the home screen" aria-label="home screen star for '+esc(REG[k][0])+'">'+(hmPend===k?'\u2605':'\u2606')+'</button>'):'';
+      tr.innerHTML='<td><b>'+esc(REG[k][0])+'</b>'+starBtn+'</td><td class="small">'+esc(REG[k][1])+'</td>'
         +'<td><button class="tg'+(u.g.indexOf(k)>=0?' on':'')+'" data-k="'+esc(k)+'" aria-label="toggle '+esc(REG[k][0])+'"></button></td>';
       mx.appendChild(tr);
     });
@@ -800,26 +1706,54 @@ function jaxauth_admin_html() {
     mx.querySelectorAll('.tg').forEach(function(t){
       t.addEventListener('click',function(){t.classList.toggle('on');});
     });
+    mx.querySelectorAll('.hstar').forEach(function(st){
+      st.addEventListener('click',function(ev){
+        ev.stopPropagation();
+        var k=st.dataset.hk;
+        var tg=mx.querySelector('.tg[data-k="'+k+'"]');
+        if(hmPend!==k&&(!tg||!tg.classList.contains('on'))){fail('Turn that widget on first, then star it.');return;}
+        aerr.classList.remove('on');
+        hmPend=(hmPend===k)?'':k;
+        mx.querySelectorAll('.hstar').forEach(function(s2){
+          var on2=s2.dataset.hk===hmPend;
+          s2.classList.toggle('on',on2);
+          s2.textContent=on2?'\u2605':'\u2606';
+        });
+      });
+    });
   }
   function renderLog(){
     var box=document.getElementById('alog');box.innerHTML='';
     LOG.forEach(function(e){
       var r=document.createElement('div');r.className='arow';
-      r.innerHTML='<time>'+esc(e.t)+'</time><span><b>'+esc(e.who)+'</b> '+esc(e.txt)+'</span>';
+      r.innerHTML='<time>'+esc(e.t)+'</time><span><b>'+esc(e.who)+'</b> '+esc(e.txt)+(e.ip?' <span style="color:#8b93a3;font-size:11.5px">from '+esc(e.ip)+'</span>':'')+'</span>';
       box.appendChild(r);
     });
     if(!LOG.length){box.innerHTML='<div class="small">Nothing logged yet.</div>';}
   }
   function renderAll(){renderUsers();renderDetail();renderLog();}
+  var pwov=document.getElementById('pwov');
+  function showTempPw(who,pw){document.getElementById('pwtitle').textContent='Temporary password for '+who;var v=document.getElementById('pwval');v.value=pw;document.getElementById('pwcopied').style.display='none';pwov.style.display='flex';v.focus();v.select();}
+  document.getElementById('pwclose').addEventListener('click',function(){document.getElementById('pwval').value='';pwov.style.display='none';});
+  document.getElementById('pwval').addEventListener('click',function(){this.select();});
+  document.getElementById('pwcopy').addEventListener('click',function(){
+    var v=document.getElementById('pwval');v.focus();v.select();
+    var done=function(){document.getElementById('pwcopied').style.display='block';};
+    var ok=false;try{ok=document.execCommand('copy');}catch(e){}
+    if(ok){done();return;}
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v.value).then(done);}
+  });
   document.getElementById('save').addEventListener('click',function(){
     var u=cur();if(!u){return;}
     aerr.classList.remove('on');
     var on=[];document.querySelectorAll('#mx .tg.on:not(.actg)').forEach(function(t){on.push(t.dataset.k);});
     var ac=[];document.querySelectorAll('#mx .actg.on').forEach(function(t){ac.push(t.dataset.ac);});
-    var body={user_id:u.id,grants:on,aircraft:ac,instructor:document.getElementById('db').value,
+    var body={user_id:u.id,grants:on,aircraft:ac,home:(on.indexOf(hmPend)>=0?hmPend:''),
+      name:document.getElementById('dn').value.trim(),
+      instructor:document.getElementById('db').value,
       disabled:document.getElementById('dd').checked};
     api('admin/save-user',body).then(function(x){
-      if(x.s===200&&x.j&&x.j.ok){u.g=on;u.ac=ac;u.b=body.instructor;u.d=body.disabled;okFlash();renderUsers();
+      if(x.s===200&&x.j&&x.j.ok){u.g=on;u.ac=ac;u.hm=body.home;hmPend=body.home;u.b=body.instructor;u.d=body.disabled;if(body.name){u.n=body.name;}okFlash();renderUsers();renderDetail();
         LOG.unshift({t:'just now',who:'you',txt:'saved '+u.n+'.'});renderLog();return;}
       fail(x.j&&x.j.message?x.j.message:'Save failed.');
     }).catch(function(){fail('Could not reach the site.');});
@@ -828,10 +1762,28 @@ function jaxauth_admin_html() {
     var u=cur();if(!u){return;}
     if(!window.confirm('Set a new temporary password for '+u.n+'? Their current one stops working immediately.')){return;}
     api('admin/reset-password',{user_id:u.id}).then(function(x){
-      if(x.s===200&&x.j&&x.j.temp_password){
-        window.alert('Temporary password for '+u.n+':\n\n  '+x.j.temp_password+'\n\nShown once - copy it now. Hand it over out of band; the site cannot email it. A new password is required at first sign-in.');
-        return;}
+      if(x.s===200&&x.j&&x.j.temp_password){showTempPw(u.n,x.j.temp_password);return;}
       fail(x.j&&x.j.message?x.j.message:'Reset failed.');
+    }).catch(function(){fail('Could not reach the site.');});
+  });
+  document.getElementById('viewAs').addEventListener('click',function(){
+    var u=cur();if(!u){return;}
+    aerr.classList.remove('on');
+    api('admin/viewas',{user_id:u.id}).then(function(x){
+      if(x.s===200&&x.j&&x.j.ok){window.open(x.j.start,'_blank');return;}
+      fail(x.j&&x.j.message?x.j.message:'Could not start the preview.');
+    }).catch(function(){fail('Could not reach the site.');});
+  });
+  document.getElementById('delU').addEventListener('click',function(){
+    var u=cur();if(!u){return;}
+    aerr.classList.remove('on');
+    if(!window.confirm('Permanently delete '+u.n+' ('+u.e+')? They will no longer be able to sign in. Their past actions stay in the audit log. This cannot be undone.')){return;}
+    api('admin/delete-user',{user_id:u.id}).then(function(x){
+      if(x.s===200&&x.j&&x.j.ok){
+        for(var i=0;i<USERS.length;i++){if(USERS[i].id===u.id){USERS.splice(i,1);break;}}
+        sel=USERS.length?USERS[0].id:0;renderAll();okFlash();
+        LOG.unshift({t:'just now',who:'you',txt:'deleted the account "'+u.n+'".'});renderLog();return;}
+      fail(x.j&&x.j.message?x.j.message:'Delete failed.');
     }).catch(function(){fail('Could not reach the site.');});
   });
   document.getElementById('addU').addEventListener('click',function(){
@@ -840,8 +1792,7 @@ function jaxauth_admin_html() {
     api('admin/create-user',{name:name,email:email}).then(function(x){
       if(x.s===200&&x.j&&x.j.temp_password){
         USERS.push({id:x.j.user_id,n:name,e:email,g:[],b:'',d:false});sel=x.j.user_id;renderAll();
-        window.alert('Account created. Temporary password for '+name+':\n\n  '+x.j.temp_password+'\n\nShown once - copy it now. A new password is required at first sign-in.');
-        return;}
+        showTempPw(name,x.j.temp_password);return;}
       fail(x.j&&x.j.message?x.j.message:'Create failed.');
     }).catch(function(){fail('Could not reach the site.');});
   });
