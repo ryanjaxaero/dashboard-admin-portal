@@ -99,6 +99,7 @@ function jaxauth_registry() {
     'owner'     => ['My Aircraft', 'your aircraft statements (owners)'],
     'invoice'   => ['Own pay dashboard', 'only the bound person - instructor or 1099 contractor'],
     'access'    => ['Access admin', 'this admin panel'],
+    'itstatus'  => ['IT status', 'health of every tool, server and job behind the dashboard'],
   ];
 }
 
@@ -117,8 +118,20 @@ function jaxauth_shortcode_map() {
     'jaxaero_requests'       => 'requests',
     'jaxaero_documents'      => 'docs',
     'jaxaero_instructor_pay' => 'invoice',
+    /* Ben, Sep 2 (punch list 13B): My Hours and Log Detailing are the bound
+       person's own data, so both ride the SAME invoice gate as the pay page (key
+       attr must match the binding; pay holders and admins pass). Sep 3 review:
+       Log Detailing was first drafted as its own 'logdetail' grant, which coupled
+       the deploy - snippet 9 drops Sam's hour form from My Pay the moment it
+       lands, and the tab only came back once someone flipped the new toggle. On
+       the invoice gate it is live the day snippet 9 lands, nothing to toggle;
+       snippet 9's own shortcode still limits it to tails-flagged manual-time
+       people (Sam), so nobody else can reach it through this door. */
+    'jaxaero_my_hours'       => 'invoice',
+    'jaxaero_log_detailing'  => 'invoice',
     'jaxaero_owner_portal'   => 'owner',
     'jaxaero_aircraft_owner' => 'ownerstmt',
+    'jaxaero_it_status'      => 'itstatus',
   ];
 }
 
@@ -658,6 +671,28 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
   if ($uid === $me && $disabled === '1') {
     return new WP_Error('jaxauth_self', 'You cannot disable your own account.', ['status' => 400]);
   }
+  /* Ryan, Sep 3 2026: "add a toggle switch to turn on admin access for people".
+     Dashboard admin = the jaxauth_admin capability (Access admin, view-as, every
+     gated page). Only a real WordPress administrator may grant or revoke it; a
+     dashboard admin cannot mint other admins, nobody can demote themselves, and
+     WordPress administrators are left alone (they are admin regardless). Sits
+     above every write so a rejected save changes nothing at all. */
+  $admParam = $req->get_param('admin');
+  $wantAdmin = ($admParam === true || $admParam === 'true' || $admParam === 1 || $admParam === '1');
+  $hasAdmin = user_can($user, JAXAUTH_CAP);
+  $admChanged = false;
+  if ($admParam !== null && $wantAdmin !== $hasAdmin) {
+    if (!current_user_can('manage_options')) {
+      return new WP_Error('jaxauth_admonly', 'Only a WordPress administrator can change admin access.', ['status' => 403]);
+    }
+    if ($uid === $me && !$wantAdmin) {
+      return new WP_Error('jaxauth_self', 'You cannot remove your own admin access.', ['status' => 400]);
+    }
+    if (user_can($user, 'manage_options')) {
+      return new WP_Error('jaxauth_wpadmin', 'That account is already a WordPress administrator.', ['status' => 400]);
+    }
+    $admChanged = true;
+  }
   /* Ryan, Aug 25: admins can fix name spelling after creation. Sits below the
      guard so a rejected save writes nothing at all. */
   if ($newName !== '' && $newName !== $user->display_name) {
@@ -701,6 +736,10 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
     if ($st) { $st->destroy_all(); }
   }
   else { delete_user_meta($uid, 'jaxauth_disabled'); }
+  if ($admChanged) {
+    if ($wantAdmin) { $user->add_cap(JAXAUTH_CAP); } else { $user->remove_cap(JAXAUTH_CAP); }
+    jaxauth_log_add(($wantAdmin ? 'GRANTED dashboard admin to "' : 'REVOKED dashboard admin from "') . $user->display_name . '".');
+  }
   $added = implode(', ', array_diff($grants, $old));
   $removed = implode(', ', array_diff($old, $grants));
   jaxauth_log_add('saved ' . $user->display_name
@@ -959,6 +998,7 @@ function jaxauth_canvas_widgets($u) {
     array('marketing', '[jaxaero_marketing]', 'Marketing'),
     array('tax', '[jaxaero_tax]', 'Sales Tax'),
     array('docs', '[jaxaero_documents]', 'Documents'),
+    array('itstatus', '[jaxaero_it_status]', 'IT Status'),
   );
   /* Ryan, Aug 31 PM: the canvas follows the ACTUAL Access Admin toggles for
      everyone - including admins. jaxauth_can()'s admin bypass put every widget
@@ -971,7 +1011,29 @@ function jaxauth_canvas_widgets($u) {
       /* the person's own pay page sits after statements, before the tools */
       $ipd = jaxauth_invoice_page($u);
       $bound = (string) get_user_meta($u->ID, 'jaxauth_instructor', true);
+      /* Ben, Sep 2 (punch list 13B): Sam's Log Detailing - snippet 9's
+         [jaxaero_log_detailing] - is his primary work area and sits directly
+         ahead of My Pay, the way Christina's statements lead hers. Sep 3 review:
+         BINDING-driven, no Access Admin toggle - it appears for exactly the
+         people snippet 9 gives the widget to (bound to a pay page, profile
+         carries the tails flag, on the manual-time list), so the tab is there
+         the moment snippet 9 removes his hour form from My Pay. Snippet 9's two
+         helpers are read behind function_exists and never written; while
+         snippet 9 is absent the tab simply is not listed. */
+      $cvsBs = sanitize_title($bound);
+      $cvsLd = ($ipd[0] !== '' && $cvsBs !== '' && function_exists('jaxpay_tails_required') && function_exists('jaxpay_manual_who')
+                && jaxpay_tails_required($cvsBs) && in_array($cvsBs, (array) jaxpay_manual_who(), true));
+      if ($cvsLd) { $out[] = array('key' => 'logdetail', 'tag' => '[jaxaero_log_detailing key="' . esc_attr($cvsBs) . '"]', 'label' => 'Log Detailing'); }
       if ($ipd[0] !== '' && $bound !== '') { $out[] = array('key' => 'mypay', 'tag' => '[jaxaero_instructor_pay key="' . esc_attr(sanitize_title($bound)) . '"]', 'label' => 'My Pay'); }
+      /* Ben, Sep 2 (punch list 13B): instructors get My Hours as its own tab.
+         The widget is snippet 9's [jaxaero_my_hours]; it is listed only once that
+         shortcode exists (until then the canvas is Safety / My Pay, nothing
+         breaks) and never for a contractor - My Hours is an instructor widget
+         (punch list 13). jaxpay_contractors is read, never written, here. */
+      if ($ipd[0] !== '' && $bound !== '' && shortcode_exists('jaxaero_my_hours')) {
+        $cvsCt = get_option('jaxpay_contractors', array());
+        if (!is_array($cvsCt) || !in_array(sanitize_title($bound), $cvsCt, true)) { $out[] = array('key' => 'myhours', 'tag' => '[jaxaero_my_hours key="' . esc_attr(sanitize_title($bound)) . '"]', 'label' => 'My Hours'); }
+      }
     }
   }
   return $out;
@@ -1058,8 +1120,13 @@ add_shortcode('jaxauth_user_canvas', function () {
   $GLOBALS['jaxauth_canvas_render'] = true;
   /* Ben, Sep-eve: multi-page Dashboard. Widgets group into Pay-Portal-style
      tabs; one-group users keep the plain canvas exactly as before. */
-  $gmap = array('auto' => 'Revenue', 'tax' => 'Revenue', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents');
-  $gorder = array('Revenue', 'Airplanes', 'Payroll', 'My Pay', 'Safety', 'Sales & Marketing', 'MX', 'Documents');
+  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Revenue', 'tax' => 'Revenue', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'itstatus' => 'IT');
+  /* Ben, Sep 2 (punch list 13B): Log Detailing leads so Sam's canvas opens on
+     it with My Pay as the next tab. Safety now precedes My Pay and My Hours
+     follows it, so an instructor's tabs read Safety / My Pay / My Hours. Nobody
+     else's relative order moves - only a holder of BOTH Safety and their own
+     pay page sees Safety step ahead of My Pay. */
+  $gorder = array('Log Detailing', 'Revenue', 'Airplanes', 'Payroll', 'Safety', 'My Pay', 'My Hours', 'Sales & Marketing', 'MX', 'Documents', 'IT');
   $groups = array();
   foreach ($gorder as $gl) { $groups[$gl] = array(); }
   foreach ($tags as $t) { $gl = isset($gmap[$t['key']]) ? $gmap[$t['key']] : 'Documents'; $groups[$gl][] = $t; }
@@ -1487,6 +1554,7 @@ function jaxauth_admin_html() {
       'd' => !jaxauth_enabled($wu->ID),
       'ac' => array_values((array) get_user_meta($wu->ID, 'jaxown_aircraft', true)),
       'hm' => (string) get_user_meta($wu->ID, 'jaxauth_home', true),
+      'a' => user_can($wu, JAXAUTH_CAP),
     ];
   }
   $acd0 = get_option('jaxac_data_last', array());
@@ -1529,6 +1597,7 @@ function jaxauth_admin_html() {
         <div class="fld" style="flex:1;min-width:170px;margin:0"><label>Email</label><input id="de" readonly></div>
         <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Pay page binding</label><select id="db"></select></div>
         <label class="small" style="display:flex;align-items:center;gap:6px;padding-bottom:4px"><input type="checkbox" id="dd"> Disabled</label>
+        <label class="small" id="admwrap" style="display:flex;align-items:center;gap:8px;padding-bottom:4px" title="Dashboard admin can open Access admin, view as anyone and see every gated page. Only a WordPress administrator can change it."><button type="button" class="tg" id="adm" aria-label="toggle dashboard admin"></button> Dashboard admin</label>
         <button class="btn ghost" id="resetPw" style="font-size:12.5px">Reset password</button>
         <button class="btn ghost" id="viewAs" style="font-size:12.5px">View as user</button>
         <button class="btn ghost" id="delU" style="font-size:12.5px;color:#C0161C;border-color:#e3b3b6">Delete user</button>
@@ -1582,7 +1651,7 @@ function jaxauth_admin_html() {
 (function(){
   var REST=<?php echo wp_json_encode($restBase); ?>,N=<?php echo wp_json_encode($nonce); ?>;
   var REG=<?php echo wp_json_encode($reg); ?>;
-  var USERS=<?php echo wp_json_encode($users); ?>;
+  var CANADM=<?php echo current_user_can('manage_options') ? 'true' : 'false'; ?>;var USERS=<?php echo wp_json_encode($users); ?>;
   var SLUGS=<?php echo wp_json_encode($slugs); ?>;
   var ACTAILS=<?php echo wp_json_encode($acTails); ?>;
   var PKEYS=<?php echo wp_json_encode($pageKeys); ?>;
@@ -1667,7 +1736,7 @@ function jaxauth_admin_html() {
     USERS.forEach(function(u){
       var b=document.createElement('button');b.className='urow'+(u.id===sel?' on':'');
       b.innerHTML='<span><b>'+esc(u.n)+'</b><span class="em">'+esc(u.e)+(u.d?' - disabled':'')+'</span></span>'
-        +'<span class="chip">'+(u.d?'OFF':(u.b?'CFI':'USER'))+'</span>';
+        +'<span class="chip">'+(u.d?'OFF':(u.a?'ADMIN':(u.b?'CFI':'USER')))+'</span>';
       b.addEventListener('click',function(){sel=u.id;renderAll();});
       box.appendChild(b);
     });
@@ -1683,6 +1752,7 @@ function jaxauth_admin_html() {
     SLUGS.forEach(function(s){var o=document.createElement('option');o.value=s;o.textContent=s;db.appendChild(o);});
     db.value=u.b||'';
     document.getElementById('dd').checked=!!u.d;
+    var adm=document.getElementById('adm');adm.classList.toggle('on',!!u.a);adm.style.opacity=CANADM?'1':'.45';adm.title=CANADM?'':'Only a WordPress administrator (Ryan) can change this';
     var mx=document.getElementById('mx');
     mx.innerHTML='<tr><th>Widget</th><th></th><th style="width:48px">On</th></tr>';
     Object.keys(REG).forEach(function(k){
@@ -1743,6 +1813,10 @@ function jaxauth_admin_html() {
     if(ok){done();return;}
     if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v.value).then(done);}
   });
+  document.getElementById('adm').addEventListener('click',function(){
+    if(!CANADM){fail('Only a WordPress administrator (Ryan) can change admin access.');return;}
+    this.classList.toggle('on');
+  });
   document.getElementById('save').addEventListener('click',function(){
     var u=cur();if(!u){return;}
     aerr.classList.remove('on');
@@ -1751,9 +1825,10 @@ function jaxauth_admin_html() {
     var body={user_id:u.id,grants:on,aircraft:ac,home:(on.indexOf(hmPend)>=0?hmPend:''),
       name:document.getElementById('dn').value.trim(),
       instructor:document.getElementById('db').value,
-      disabled:document.getElementById('dd').checked};
+      disabled:document.getElementById('dd').checked,
+      admin:document.getElementById('adm').classList.contains('on')};
     api('admin/save-user',body).then(function(x){
-      if(x.s===200&&x.j&&x.j.ok){u.g=on;u.ac=ac;u.hm=body.home;hmPend=body.home;u.b=body.instructor;u.d=body.disabled;if(body.name){u.n=body.name;}okFlash();renderUsers();renderDetail();
+      if(x.s===200&&x.j&&x.j.ok){u.g=on;u.ac=ac;u.hm=body.home;hmPend=body.home;u.b=body.instructor;u.d=body.disabled;u.a=body.admin;if(body.name){u.n=body.name;}okFlash();renderUsers();renderDetail();
         LOG.unshift({t:'just now',who:'you',txt:'saved '+u.n+'.'});renderLog();return;}
       fail(x.j&&x.j.message?x.j.message:'Save failed.');
     }).catch(function(){fail('Could not reach the site.');});
