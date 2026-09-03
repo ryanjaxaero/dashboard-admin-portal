@@ -1543,6 +1543,8 @@ add_shortcode('jaxaero_access_admin', function () {
 
 function jaxauth_admin_html() {
   $nonce = wp_create_nonce('wp_rest');
+  /* Ryan, Sep 3 2026: a button to the IT status page (snippet 20) from the admin portal */
+  $itPg = get_page_by_path('it-status'); $itUrl = $itPg ? get_permalink($itPg) : home_url('/it-status/');
   $restBase = esc_url_raw(rest_url('jaxauth/v1/'));
   $reg = jaxauth_registry();
   $users = [];
@@ -1584,6 +1586,7 @@ function jaxauth_admin_html() {
   <span class="brand">JAXAERO</span>
   <h1>Access admin</h1>
   <div class="sub">Pick a person, flip toggles, save. Changes apply on their next page load. Every save is logged below.</div>
+  <div style="display:flex;gap:10px;align-items:center;margin:-4px 0 14px"><a class="btn ghost" href="<?php echo esc_url($itUrl); ?>" target="_top" style="font-size:12.5px;text-decoration:none;display:inline-block">IT status</a><span class="small">How every tool, server and job behind the dashboard is doing.</span></div>
   <div class="grid2">
     <div class="mod ulist">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
