@@ -99,7 +99,8 @@ function jaxauth_registry() {
     'owner'     => ['My Aircraft', 'your aircraft statements (owners)'],
     'invoice'   => ['Own pay dashboard', 'only the bound person - instructor or 1099 contractor'],
     'access'    => ['Access admin', 'this admin panel'],
-    'itstatus'  => ['IT status', 'health of every tool, server and job behind the dashboard'],
+    /* Ryan, Sep 3 2026: the IT status page (snippet 20) is deliberately NOT a grantable
+       widget or canvas tab - only dashboard admins reach it, via the Access admin button. */
   ];
 }
 
@@ -131,7 +132,6 @@ function jaxauth_shortcode_map() {
     'jaxaero_log_detailing'  => 'invoice',
     'jaxaero_owner_portal'   => 'owner',
     'jaxaero_aircraft_owner' => 'ownerstmt',
-    'jaxaero_it_status'      => 'itstatus',
   ];
 }
 
@@ -998,7 +998,6 @@ function jaxauth_canvas_widgets($u) {
     array('marketing', '[jaxaero_marketing]', 'Marketing'),
     array('tax', '[jaxaero_tax]', 'Sales Tax'),
     array('docs', '[jaxaero_documents]', 'Documents'),
-    array('itstatus', '[jaxaero_it_status]', 'IT Status'),
   );
   /* Ryan, Aug 31 PM: the canvas follows the ACTUAL Access Admin toggles for
      everyone - including admins. jaxauth_can()'s admin bypass put every widget
@@ -1120,13 +1119,13 @@ add_shortcode('jaxauth_user_canvas', function () {
   $GLOBALS['jaxauth_canvas_render'] = true;
   /* Ben, Sep-eve: multi-page Dashboard. Widgets group into Pay-Portal-style
      tabs; one-group users keep the plain canvas exactly as before. */
-  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Revenue', 'tax' => 'Revenue', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'itstatus' => 'IT');
+  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Revenue', 'tax' => 'Revenue', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents');
   /* Ben, Sep 2 (punch list 13B): Log Detailing leads so Sam's canvas opens on
      it with My Pay as the next tab. Safety now precedes My Pay and My Hours
      follows it, so an instructor's tabs read Safety / My Pay / My Hours. Nobody
      else's relative order moves - only a holder of BOTH Safety and their own
      pay page sees Safety step ahead of My Pay. */
-  $gorder = array('Log Detailing', 'Revenue', 'Airplanes', 'Payroll', 'Safety', 'My Pay', 'My Hours', 'Sales & Marketing', 'MX', 'Documents', 'IT');
+  $gorder = array('Log Detailing', 'Revenue', 'Airplanes', 'Payroll', 'Safety', 'My Pay', 'My Hours', 'Sales & Marketing', 'MX', 'Documents');
   $groups = array();
   foreach ($gorder as $gl) { $groups[$gl] = array(); }
   foreach ($tags as $t) { $gl = isset($gmap[$t['key']]) ? $gmap[$t['key']] : 'Documents'; $groups[$gl][] = $t; }
