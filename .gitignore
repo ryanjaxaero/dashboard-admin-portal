@@ -2,3 +2,4 @@ wpauth.netrc
 *.netrc
 *.local.php
 .secrets/
+*.bak

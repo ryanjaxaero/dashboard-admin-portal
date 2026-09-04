@@ -35,6 +35,8 @@
      requests   [jaxaero_requests]        page 5816
      invoice    [jaxaero_instructor_pay]  only the bound slug renders
      access     the admin panel page
+     lease      [jaxaero_leases]          lease management (VR Leasing) - canvas Accounting tab
+     lessor     [jaxaero_lessor]          lessor portal - the VR Leasing login, read-only
      Sub-widget keys (rev.mom etc.) are phase 2 - they need guards
      inside snippets 5-9 and are deliberately not claimed here.
 
@@ -93,10 +95,12 @@ function jaxauth_registry() {
     'safety'    => ['Safety', 'company-wide FOQA safety data'],
     'mxtime'    => ['MX Timeclock', 'mechanic clock in/out, pay and task mix'],
     'tax'       => ['Sales tax', 'aircraft sales tax page'],
+    'lease'     => ['Leases', 'lease management - VR Leasing aircraft'],
     'docs'      => ['Documents', 'archive & search'],
     'expense'   => ['Add expenses', 'enter expenses on the owner P/L'],
     'ownerstmt' => ['Aircraft owner statements', 'staff view - every plane P/L'],
     'owner'     => ['My Aircraft', 'your aircraft statements (owners)'],
+    'lessor'    => ['Lessor portal', 'VR Leasing read-only statements'],
     'invoice'   => ['Own pay dashboard', 'only the bound person - instructor or 1099 contractor'],
     'access'    => ['Access admin', 'this admin panel'],
     /* Ryan, Sep 3 2026: the IT status page (snippet 20) is deliberately NOT a grantable
@@ -132,6 +136,10 @@ function jaxauth_shortcode_map() {
     'jaxaero_log_detailing'  => 'invoice',
     'jaxaero_owner_portal'   => 'owner',
     'jaxaero_aircraft_owner' => 'ownerstmt',
+    /* Ryan, Sep 4 2026 (lease): the VR Leasing lease widget (staff) and the
+       lessor's read-only statements. Both are ordinary grants. */
+    'jaxaero_leases'         => 'lease',
+    'jaxaero_lessor'         => 'lessor',
   ];
 }
 
@@ -617,7 +625,19 @@ function jaxauth_generic_fail() {
 }
 
 function jaxauth_rest_login(WP_REST_Request $req) {
-  $email = sanitize_email((string) $req->get_param('email'));
+  $rawId = trim((string) $req->get_param('email'));
+  $email = sanitize_email($rawId);
+  /* Ryan, Sep 4 2026 (lease): the VR Leasing lessor account has no email and
+     signs in with its plain sign-in name (vr-leasing). Input that is not
+     email-shaped is handed to wp_authenticate as a login name ONLY when it
+     names an account that has no email; every account that has one keeps
+     failing here exactly as before, so this open route never becomes a
+     username door for WP administrator logins. Email sign-in is unchanged;
+     the rate limit keys on whatever was typed, as before. */
+  if ($email === '' && $rawId !== '') {
+    $lu = get_user_by('login', sanitize_user($rawId, true));
+    if ($lu && (string) $lu->user_email === '') { $email = $lu->user_login; }
+  }
   $pw    = (string) $req->get_param('password');
   if ($email === '' || $pw === '') { return jaxauth_generic_fail(); }
   if (jaxauth_rl_blocked($email)) {
@@ -778,26 +798,51 @@ function jaxauth_rest_ai_key(WP_REST_Request $req) {
 function jaxauth_rest_create_user(WP_REST_Request $req) {
   $name  = sanitize_text_field((string) $req->get_param('name'));
   $email = sanitize_email((string) $req->get_param('email'));
-  if ($name === '' || !is_email($email)) {
+  /* Ryan, Sep 4 2026 (lease): optional starting grants (registry keys only,
+     default none - the Access admin UI sends none and is unchanged). The VR
+     Leasing lessor login has NO email, Ryan's call: an empty email is accepted
+     ONLY when the requested grants are exactly ['lessor']; the sign-in name is
+     then the 'login' param (else the name slugged, "VR Leasing" -> vr-leasing)
+     and the audit line says so. Every other account still needs a valid email. */
+  $grants = $req->get_param('grants');
+  $grants = is_array($grants)
+    ? array_values(array_unique(array_intersect(array_map('sanitize_text_field', $grants), array_keys(jaxauth_registry()))))
+    : [];
+  /* 'owner' is derived from aircraft bindings and 'access' is the admin
+     capability - save-user manages both by other means, so neither can be
+     seeded here. */
+  $grants = array_values(array_diff($grants, ['owner', 'access']));
+  $lessorOnly = (count($grants) === 1 && $grants[0] === 'lessor');
+  if ($name === '' || ($email === '' && !$lessorOnly) || ($email !== '' && !is_email($email))) {
     return new WP_Error('jaxauth_bad', 'A name and a valid email are required.', ['status' => 400]);
   }
-  if (get_user_by('email', $email)) {
+  if ($email !== '' && get_user_by('email', $email)) {
     return new WP_Error('jaxauth_dup', 'A user with that email already exists.', ['status' => 409]);
+  }
+  $login = $email;
+  if ($email === '') {
+    $login = sanitize_user((string) $req->get_param('login'), true);
+    if ($login === '') { $login = sanitize_user(sanitize_title($name), true); }
+    if ($login === '') { return new WP_Error('jaxauth_bad', 'A sign-in name is required for an account with no email.', ['status' => 400]); }
+    if (username_exists($login)) { return new WP_Error('jaxauth_dup', 'A user with that sign-in name already exists.', ['status' => 409]); }
   }
   $temp = wp_generate_password(14, false, false);
   $uid = wp_insert_user([
-    'user_login'   => $email,
+    'user_login'   => $login,
     'user_email'   => $email,
     'user_pass'    => $temp,
     'display_name' => $name,
     'role'         => JAXAUTH_ROLE,
   ]);
   if (is_wp_error($uid)) { return $uid; }
-  update_user_meta($uid, 'jaxauth_grants', []);
+  update_user_meta($uid, 'jaxauth_grants', $grants);
   update_user_meta($uid, 'jaxauth_instructor', '');
   update_user_meta($uid, 'jaxauth_must_change', '1');
-  jaxauth_log_add('created account for ' . $name . '. Temporary password shown once.');
-  return ['ok' => true, 'user_id' => $uid, 'temp_password' => $temp];
+  jaxauth_log_add('created account for ' . $name
+    . ($email === '' ? ' with NO email (lessor-only account; sign-in name "' . $login . '").' : '.')
+    . ($grants ? ' Gave: ' . implode(', ', $grants) . '.' : '')
+    . ' Temporary password shown once.');
+  return ['ok' => true, 'user_id' => $uid, 'login' => $login, 'temp_password' => $temp];
 }
 
 /* Ryan, Aug 25: each user can star one of their own home cards to pick
@@ -1007,9 +1052,11 @@ function jaxauth_canvas_widgets($u) {
     array('mxtime', '[jaxaero_mx_time]', 'MX Timeclock'),
     array('ownerstmt', '[jaxaero_aircraft_owner]', 'Aircraft Owner Statements'),
     array('owner', '[jaxaero_owner_portal]', 'My Aircraft'),
+    array('lessor', '[jaxaero_lessor]', 'Lease statements'),
     array('sales', '[jaxaero_sales_pipeline]', 'Sales'),
     array('marketing', '[jaxaero_marketing]', 'Marketing'),
     array('tax', '[jaxaero_tax]', 'Sales Tax'),
+    array('lease', '[jaxaero_leases]', 'Leases'),
     array('docs', '[jaxaero_documents]', 'Documents'),
   );
   /* Ryan, Aug 31 PM: the canvas follows the ACTUAL Access Admin toggles for
@@ -1132,13 +1179,19 @@ add_shortcode('jaxauth_user_canvas', function () {
   $GLOBALS['jaxauth_canvas_render'] = true;
   /* Ben, Sep-eve: multi-page Dashboard. Widgets group into Pay-Portal-style
      tabs; one-group users keep the plain canvas exactly as before. */
-  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Revenue', 'tax' => 'Revenue', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents');
+  /* Ryan, Sep 4 2026 (lease): the Revenue bubble is now the Accounting
+     department (Revenue / Sales tax / Leases as a sub-menu, see $subGroups
+     below); the lessor's statements are their own bubble. */
+  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease statements');
   /* Ben, Sep 2 (punch list 13B): Log Detailing leads so Sam's canvas opens on
      it with My Pay as the next tab. Safety now precedes My Pay and My Hours
      follows it, so an instructor's tabs read Safety / My Pay / My Hours. Nobody
      else's relative order moves - only a holder of BOTH Safety and their own
      pay page sees Safety step ahead of My Pay. */
-  $gorder = array('Log Detailing', 'Revenue', 'Airplanes', 'Payroll', 'Safety', 'My Pay', 'My Hours', 'Sales & Marketing', 'MX', 'Documents');
+  /* 'Accounting' sits at the index 'Revenue' held so saved jaxDashTab cookies
+     keep pointing at the same bubble; 'Lease statements' is appended LAST so
+     no existing user's group index moves (nobody holds 'lessor' yet). */
+  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'My Pay', 'My Hours', 'Sales & Marketing', 'MX', 'Documents', 'Lease statements');
   $groups = array();
   foreach ($gorder as $gl) { $groups[$gl] = array(); }
   foreach ($tags as $t) { $gl = isset($gmap[$t['key']]) ? $gmap[$t['key']] : 'Documents'; $groups[$gl][] = $t; }
@@ -1163,7 +1216,16 @@ add_shortcode('jaxauth_user_canvas', function () {
     $html .= '<style>.jaxdash-tabs{display:flex;gap:8px;flex-wrap:wrap;max-width:1080px;margin:14px auto 4px;padding:0 16px;font-family:\'Segoe UI\',Roboto,Arial,sans-serif}'
            . '.jaxdash-tab{font:700 13.5px \'Segoe UI\',Roboto,Arial,sans-serif !important;padding:9px 18px !important;border:1px solid #d9dee7 !important;background:#fff !important;border-radius:999px !important;cursor:pointer;color:#1F2F54 !important;letter-spacing:0 !important;text-transform:none !important;box-shadow:none !important;min-width:0 !important;width:auto !important;line-height:1.2 !important}'
            . '.jaxdash-tab.on{background:#1F2F54 !important;color:#fff !important;border-color:#1F2F54 !important}'
-           . '.jaxdash-g{display:none}.jaxdash-g.on{display:block}</style>';
+           . '.jaxdash-g{display:none}.jaxdash-g.on{display:block}'
+           /* Ryan, Sep 4 2026 (lease): the department sub-menu strip - snippet 9's
+              Pay Portal .ptabs/.ptab treatment (grey #6b7484, navy #1F2F54 on,
+              red #C10F1B underline). It renders OUTSIDE any iframe, so every
+              declaration Elementor's kit could repaint is pinned. */
+           . '.jaxsub{display:flex !important;flex-wrap:wrap;gap:2px;max-width:1080px;margin:8px auto 0 !important;padding:0 16px !important;border-bottom:1px solid #e6e9ef;box-sizing:border-box;font-family:\'Segoe UI\',Roboto,Arial,sans-serif}'
+           . '.jaxsub .ptab{font:700 13.5px \'Segoe UI\',Roboto,Arial,sans-serif !important;padding:9px 16px !important;border:0 !important;border-bottom:3px solid transparent !important;margin:0 0 -1px !important;background:none !important;border-radius:0 !important;box-shadow:none !important;color:#6b7484 !important;cursor:pointer;white-space:nowrap;letter-spacing:0 !important;text-transform:none !important;min-width:0 !important;width:auto !important;line-height:1.2 !important}'
+           . '.jaxsub .ptab:hover{color:#1F2F54 !important}'
+           . '.jaxsub .ptab.on{color:#1F2F54 !important;border-bottom-color:#C10F1B !important}'
+           . '.jaxsub-p{display:none}.jaxsub-p.on{display:block}</style>';
     /* Ryan, Sep 2 (Tier 1): inline the SAVED tab's first widget, not always
        group 0's - act() mirrors the shown tab into a cookie so a returning
        Payroll user gets Payroll at first paint. Invalid/absent cookie falls
@@ -1183,18 +1245,45 @@ add_shortcode('jaxauth_user_canvas', function () {
       }
     }
     if ($homeG > -1) { $savedG = $homeG; }
+    /* Ryan, Sep 4 2026 (lease): department sub-menus. A group named in
+       $subGroups renders a Pay-Portal-style strip (one .ptab per widget, labels
+       from $subLabels, else the widget's menu label) and shows ONE widget at a
+       time; every other group stacks its widgets exactly as before. Only the
+       first (or the stored home's) sub-panel of the shown bubble is inlined;
+       the rest are lazy placeholders the loader still fetches - it drains its
+       whole queue, visible or not. A group with a single widget gets no strip. */
+    $subGroups = array('Accounting');
+    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales tax', 'lease' => 'Leases');
     $gi = 0; $tabsH = ''; $bodyH = '';
     foreach ($groups as $gl => $gw) {
       $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">' . esc_html($gl) . '</button>';
       $keysCsv = implode(',', array_map(function ($x) { return $x['key']; }, $gw));
       $bodyH .= '<div class="jaxdash-g" id="jaxg-' . $gi . '" data-gkeys="' . esc_attr($keysCsv) . '">';
+      $isSub = in_array($gl, $subGroups, true) && count($gw) > 1;
+      $inlineJ = 0;
+      /* pick() below mirrors the chosen sub-tab into a jaxSub-<group> cookie
+         (the jaxDashTab pattern), so a returning user's last sub-panel is the
+         one inlined at first paint instead of arriving by a lazy fetch. The
+         stored home key still wins inside the home group; an absent or unknown
+         cookie inlines the first sub-panel, exactly as before. */
+      $subC = isset($_COOKIE['jaxSub-' . $gl]) ? sanitize_key((string) $_COOKIE['jaxSub-' . $gl]) : '';
+      if ($isSub) {
+        $bodyH .= '<nav class="jaxsub ptabs" data-sg="' . esc_attr($gl) . '" aria-label="' . esc_attr($gl) . ' sections">';
+        foreach ($gw as $j => $t) {
+          $bodyH .= '<button type="button" class="ptab" data-k="' . esc_attr($t['key']) . '">' . esc_html(isset($subLabels[$t['key']]) ? $subLabels[$t['key']] : $t['label']) . '</button>';
+          if ($gi !== $homeG && $subC !== '' && $t['key'] === $subC) { $inlineJ = $j; }
+          if ($gi === $homeG && $t['key'] === $homeK) { $inlineJ = $j; }
+        }
+        $bodyH .= '</nav>';
+      }
       foreach ($gw as $j => $t) {
-        if ($gi === $savedG && $j === 0) {
-          $bodyH .= '<div id="jaxw-' . esc_attr($t['key']) . '">' . do_shortcode($t['tag']) . '</div>';
+        if ($gi === $savedG && $j === $inlineJ) {
+          $wH = '<div id="jaxw-' . esc_attr($t['key']) . '">' . do_shortcode($t['tag']) . '</div>';
         } else {
           $lazyKeys[] = $t['key'];
-          $bodyH .= $phFn($t);
+          $wH = $phFn($t);
         }
+        $bodyH .= $isSub ? ('<div class="jaxsub-p" data-k="' . esc_attr($t['key']) . '">' . $wH . '</div>') : $wH;
       }
       $bodyH .= '</div>';
       $gi++;
@@ -1213,6 +1302,19 @@ add_shortcode('jaxauth_user_canvas', function () {
       . 'var hi=byHash();act(hi>-1?hi:st);'
       . 'window.addEventListener("hashchange",function(){var i=byHash();if(i>-1){act(i);var el=document.getElementById("jaxw-"+((window.location.hash||"").replace("#jaxw-","")));if(el){el.scrollIntoView();}}});'
       . '})();</script>';
+    /* Ryan, Sep 4 2026 (lease): sub-menu behaviour. A click selects; the choice
+       is remembered per group in localStorage jaxSub-<group>; a #jaxw-<key>
+       deep link (menu pane, hashchange) selects the matching sub-panel; the
+       stored home key wins at every load, the way the home tab does above.
+       Block comments only, every statement terminated - same rules as srcdoc. */
+    $html .= '<script>(function(){var navs=document.querySelectorAll(".jaxsub");if(!navs.length){return;}var HK=' . wp_json_encode($homeK) . ';'
+      . 'function keyOf(h){return (h||"").replace("#jaxw-","");}'
+      . 'function has(nav,k){if(!k){return false;}var ts=nav.querySelectorAll(".ptab");for(var i=0;i<ts.length;i++){if(ts[i].getAttribute("data-k")===k){return true;}}return false;}'
+      . 'function pick(nav,k,save){var ts=nav.querySelectorAll(".ptab");if(!has(nav,k)){k=ts.length?ts[0].getAttribute("data-k"):"";}for(var i=0;i<ts.length;i++){ts[i].classList.toggle("on",ts[i].getAttribute("data-k")===k);}var ps=nav.parentNode.querySelectorAll(".jaxsub-p");for(var j=0;j<ps.length;j++){ps[j].classList.toggle("on",ps[j].getAttribute("data-k")===k);}if(save){try{localStorage.setItem("jaxSub-"+nav.getAttribute("data-sg"),k);}catch(e){}try{document.cookie="jaxSub-"+nav.getAttribute("data-sg")+"="+k+";path=/;max-age=31536000;SameSite=Lax;Secure";}catch(e2){}}}'
+      . 'function initial(nav){var hk=keyOf(window.location.hash);if(has(nav,hk)){return hk;}if(has(nav,HK)){return HK;}var s="";try{s=localStorage.getItem("jaxSub-"+nav.getAttribute("data-sg"))||"";}catch(e){}return s;}'
+      . 'for(var n=0;n<navs.length;n++){(function(nav){pick(nav,initial(nav),false);nav.addEventListener("click",function(ev){var b=ev.target&&ev.target.closest?ev.target.closest(".ptab"):null;if(!b){return;}pick(nav,b.getAttribute("data-k"),true);});})(navs[n]);}'
+      . 'window.addEventListener("hashchange",function(){var hk=keyOf(window.location.hash);for(var n=0;n<navs.length;n++){if(has(navs[n],hk)){pick(navs[n],hk,true);var el=document.getElementById("jaxw-"+hk);if(el){el.scrollIntoView();}}}});'
+      . '})();</script>';
   }
   unset($GLOBALS['jaxauth_canvas_render']);
   if ($lazyKeys) {
@@ -1226,7 +1328,7 @@ add_shortcode('jaxauth_user_canvas', function () {
       . 'var KEYS=' . wp_json_encode(array_values($lazyKeys)) . ';var MAX=2;var inflight=0;var failed={};'
       . 'function runScripts(root){var ss=root.querySelectorAll("script");for(var i=0;i<ss.length;i++){var o=ss[i];var n=document.createElement("script");if(o.src){n.src=o.src;}else{n.text=o.text;}o.parentNode.replaceChild(n,o);}}'
       . 'function phOf(key){return document.querySelector(".jaxw-lazy[data-jaxw=\""+key+"\"]");}'
-      . 'function hiddenKey(key){var ph=phOf(key);if(!ph||!ph.closest){return false;}var g=ph.closest(".jaxdash-g");return !!(g&&!g.classList.contains("on"));}'
+      . 'function hiddenKey(key){var ph=phOf(key);if(!ph||!ph.closest){return false;}var g=ph.closest(".jaxdash-g");var sp=ph.closest(".jaxsub-p");return !!((g&&!g.classList.contains("on"))||(sp&&!sp.classList.contains("on")));}'
       . 'var singles=[],batch=[];KEYS.forEach(function(k){(hiddenKey(k)?batch:singles).push(k);});'
       . 'var queue=singles.map(function(k){return [k];});if(batch.length){queue.push(batch.slice());}'
       . 'function markErr(key,msg){var ph=phOf(key);if(ph&&ph.firstElementChild){ph.firstElementChild.textContent=msg;}}'
@@ -1244,6 +1346,7 @@ add_shortcode('jaxauth_user_canvas', function () {
       . 'document.querySelectorAll(".jaxw-lazy").forEach(function(el){io.observe(el);});}'
       . 'var tabsEl=document.getElementById("jaxdashTabs");'
       . 'if(tabsEl){tabsEl.addEventListener("click",function(ev){var b=ev.target&&ev.target.closest?ev.target.closest(".jaxdash-tab"):null;if(!b){return;}var g=document.getElementById("jaxg-"+b.getAttribute("data-g"));if(!g){return;}var ks=(g.getAttribute("data-gkeys")||"").split(",");for(var i=ks.length-1;i>=0;i--){if(ks[i]){promote(ks[i]);}}next();});}'
+      . 'var subNavs=document.querySelectorAll(".jaxsub");for(var sn=0;sn<subNavs.length;sn++){subNavs[sn].addEventListener("click",function(ev){var b=ev.target&&ev.target.closest?ev.target.closest(".ptab"):null;if(!b){return;}promote(b.getAttribute("data-k"));next();});}'
       . 'function kick(){setTimeout(next,150);}'
       . 'if(document.readyState==="interactive"||document.readyState==="complete"){kick();}else{document.addEventListener("DOMContentLoaded",kick);}'
       . '})();</script>';
@@ -1441,8 +1544,8 @@ function jaxauth_login_html() {
   <h1 style="text-align:center;font-size:20px">Sign in to your dashboard</h1>
   <div class="mod" style="margin-top:14px">
     <div class="err" id="err"></div>
-    <div class="fld"><label for="em">Email address</label>
-      <input id="em" type="email" autocomplete="username" placeholder="you@flyjaxaero.com"></div>
+    <div class="fld"><label for="em">Email or sign-in name</label>
+      <input id="em" type="text" autocomplete="username" placeholder="you@flyjaxaero.com" inputmode="email" autocapitalize="none" spellcheck="false"></div>
     <div class="fld"><label for="pw">Password</label>
       <input id="pw" type="password" autocomplete="current-password"></div>
     <button class="btn red" id="go" style="width:100%">Sign in</button>
@@ -1489,7 +1592,7 @@ function jaxauth_home_html($u) {
 <div class="wrap">
   <span class="brand">JAXAERO</span>
   <h1>Welcome, <?php echo esc_html($u->display_name); ?></h1>
-  <div class="sub">Your account preferences. Signed in as <?php echo esc_html($u->user_email); ?>.
+  <div class="sub">Your account preferences. Signed in as <?php echo esc_html((string) $u->user_email !== '' ? $u->user_email : $u->user_login); ?>.
     <button class="btn ghost" id="out" style="padding:9px 16px;font-size:13px;margin-left:8px;vertical-align:middle">Sign out</button></div>
   <?php if ($must) { ?><div class="note"><b>Please choose a new password now.</b> The one you signed in with was temporary.</div><?php } ?>
   <div class="mod" id="chpw" style="margin-top:16px;max-width:430px">
@@ -1582,7 +1685,8 @@ function jaxauth_admin_html() {
   foreach (get_users(['role' => JAXAUTH_ROLE]) as $wu) {
     $bSlug = (string) get_user_meta($wu->ID, 'jaxauth_instructor', true);
     $users[] = [
-      'id' => $wu->ID, 'n' => $wu->display_name, 'e' => $wu->user_email,
+      /* a no-email (lessor) account shows its sign-in name where the email would be */
+      'id' => $wu->ID, 'n' => $wu->display_name, 'e' => ((string) $wu->user_email !== '' ? $wu->user_email : $wu->user_login),
       'g' => jaxauth_grants($wu->ID),
       'b' => $bSlug,
       'ct' => ($bSlug !== '' && in_array(sanitize_title($bSlug), $ctSlugs, true)),
