@@ -498,8 +498,12 @@ add_action('template_redirect', function () {
   $signinP = (int) get_option('jaxauth_signin_page');
   if ($signinP && $pid === $signinP && is_user_logged_in() && !isset($_GET['chpw']) && !isset($_GET['settings'])) {
     $ru = wp_get_current_user();
+    /* Ryan, Sep 4 2026: a View-as preview cannot change the target's password,
+       so the temporary-password hold does not apply there - the preview goes on
+       to the person's real landing (Sam Davis -> Log Detailing). */
+    $ruPreview = !empty($GLOBALS['jaxauth_viewas_target']);
     if (($ru && $ru->exists() && (jaxauth_is_managed($ru) || jaxauth_is_admin($ru)))
-        && get_user_meta($ru->ID, 'jaxauth_must_change', true) !== '1') {
+        && ($ruPreview || get_user_meta($ru->ID, 'jaxauth_must_change', true) !== '1')) {
       $rdest = jaxauth_default_dest($ru);
       if ($rdest !== '' && untrailingslashit($rdest) !== untrailingslashit(get_permalink($signinP))) {
         nocache_headers();
