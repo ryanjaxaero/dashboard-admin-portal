@@ -305,7 +305,11 @@ function jaxauth_default_dest($user = null) {
   /* Ryan, Aug 31: managed users land on THE User Canvas, which composes their
      widgets from the Access Admin toggles - so a toggle works the moment it is
      flipped. WP admins keep the legacy staff routing below. */
-  if (!user_can($user->ID, 'manage_options')) {
+  /* Ryan, Sep 4 2026: WordPress administrators used to skip the canvas entirely,
+     which is why Ryan's home looked nothing like Ben's. Anyone whose toggles
+     compose at least one widget lands on the canvas; an admin with no toggles
+     still falls through to the legacy staff routing below. */
+  if (true) {
     $sharedC = (int) get_option('jaxauth_canvas_page');
     if ($sharedC && get_post_status($sharedC) === 'publish' && count(jaxauth_canvas_widgets($user)) > 0) {
       $scl = get_permalink($sharedC);
@@ -681,7 +685,11 @@ function jaxauth_rest_change_pw(WP_REST_Request $req) {
 function jaxauth_rest_save_user(WP_REST_Request $req) {
   $uid = (int) $req->get_param('user_id');
   $user = get_user_by('id', $uid);
-  if (!$user || !jaxauth_is_managed($user)) {
+  /* Ryan, Sep 4 2026: "mine and Ben Gabriel's views and access should be identical".
+     A WordPress administrator carries no jaxauth_grants meta and no member role, so
+     the Access admin could not manage him and his canvas composed to nothing. Staff
+     admins are editable here; delete-user and reset-password keep the old guard. */
+  if (!$user || (!jaxauth_is_managed($user) && !user_can($user->ID, 'manage_options'))) {
     return new WP_Error('jaxauth_nouser', 'No such managed user.', ['status' => 404]);
   }
   $me = get_current_user_id();
@@ -1228,6 +1236,8 @@ add_shortcode('jaxauth_user_canvas', function () {
            . '.jaxsub .ptab{font:700 13.5px \'Segoe UI\',Roboto,Arial,sans-serif !important;padding:9px 16px !important;border:0 !important;border-bottom:3px solid transparent !important;margin:0 0 -1px !important;background:none !important;border-radius:0 !important;box-shadow:none !important;color:#6b7484 !important;cursor:pointer;white-space:nowrap;letter-spacing:0 !important;text-transform:none !important;min-width:0 !important;width:auto !important;line-height:1.2 !important}'
            . '.jaxsub .ptab:hover{color:#1F2F54 !important}'
            . '.jaxsub .ptab.on{color:#1F2F54 !important;border-bottom-color:#C10F1B !important}'
+           . '.jaxsub-rule{max-width:1080px;margin:14px auto 0 !important;padding:0 16px;box-sizing:border-box}'
+           . '.jaxsub-rule i{display:block;height:3px;background:#C0A788;border-radius:2px}'
            . '.jaxsub-p{display:none}.jaxsub-p.on{display:block}</style>';
     /* Ryan, Sep 2 (Tier 1): inline the SAVED tab's first widget, not always
        group 0's - act() mirrors the shown tab into a cookie so a returning
@@ -1271,6 +1281,9 @@ add_shortcode('jaxauth_user_canvas', function () {
          cookie inlines the first sub-panel, exactly as before. */
       $subC = isset($_COOKIE['jaxSub-' . $gl]) ? sanitize_key((string) $_COOKIE['jaxSub-' . $gl]) : '';
       if ($isSub) {
+        /* Ryan, Sep 4 2026: the house accent - a gold rule with the sub-widget
+           tabs directly underneath, the same rhythm as the Pay Portal header. */
+        $bodyH .= '<div class="jaxsub-rule"><i></i></div>';
         $bodyH .= '<nav class="jaxsub ptabs" data-sg="' . esc_attr($gl) . '" aria-label="' . esc_attr($gl) . ' sections">';
         foreach ($gw as $j => $t) {
           $bodyH .= '<button type="button" class="ptab" data-k="' . esc_attr($t['key']) . '">' . esc_html(isset($subLabels[$t['key']]) ? $subLabels[$t['key']] : $t['label']) . '</button>';
@@ -1685,7 +1698,16 @@ function jaxauth_admin_html() {
      'ct' (binding is in jaxpay_contractors - read only, never written here). */
   $ctSlugs = get_option('jaxpay_contractors', array());
   if (!is_array($ctSlugs)) { $ctSlugs = array(); }
-  foreach (get_users(['role' => JAXAUTH_ROLE]) as $wu) {
+  /* Ryan, Sep 4 2026: staff administrators (Ryan) list beside managed members
+     (Ben) so one screen drives both and their canvases can be made identical. */
+  $jxPeople = get_users(['role' => JAXAUTH_ROLE]);
+  $jxSeen = array();
+  foreach ($jxPeople as $wu) { $jxSeen[$wu->ID] = true; }
+  foreach (get_users(['role' => 'administrator']) as $wa) {
+    if (empty($jxSeen[$wa->ID])) { $jxPeople[] = $wa; $jxSeen[$wa->ID] = true; }
+  }
+  usort($jxPeople, function ($a, $b) { return strcasecmp($a->display_name, $b->display_name); });
+  foreach ($jxPeople as $wu) {
     $bSlug = (string) get_user_meta($wu->ID, 'jaxauth_instructor', true);
     $users[] = [
       /* a no-email (lessor) account shows its sign-in name where the email would be */
