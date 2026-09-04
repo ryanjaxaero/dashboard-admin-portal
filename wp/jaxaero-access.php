@@ -1154,6 +1154,9 @@ add_shortcode('jaxauth_user_canvas', function () {
      canvas. Widgets suppress their own greeting while this flag is up (they
      keep it on standalone pages). */
   $first = trim((string) strtok($u->display_name, ' '));
+  /* Ryan, Sep 4 2026: a company account (the VR Leasing lessor login, grants exactly
+     ['lessor']) is greeted by its full name, not by "VR". */
+  if (function_exists('jaxauth_grants') && jaxauth_grants($u->ID) === array('lessor')) { $first = trim((string) $u->display_name); }
   $html = '<style>div[id^="jaxw-"]{scroll-margin-top:72px}</style>';
   $html .= '<div style="max-width:1080px;margin:20px auto 4px;padding:0 16px;font-family:\'Segoe UI\',Roboto,Arial,sans-serif">'
         . '<div style="color:#C10F1B;font-weight:800;font-size:12px;letter-spacing:.12em">JAXAERO</div>'
