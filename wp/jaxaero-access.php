@@ -718,7 +718,12 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
   /* starred home screen - only a granted widget that has a page qualifies */
   $homeSel = sanitize_text_field((string) $req->get_param('home'));
   $homePageKeys = array_values(array_diff(array_intersect(array_values((array) get_option('jaxauth_pages', [])), array_keys(jaxauth_registry())), ['access']));
-  if ($homeSel !== '' && (!in_array($homeSel, $grants, true) || !in_array($homeSel, $homePageKeys, true))) { $homeSel = ''; }
+  /* Ryan, Sep 4 2026: a canvas tab key (Sam's binding-driven 'logdetail') is
+     also a valid home - the canvas opens on that tab. Grants were just saved
+     above; the binding save follows, so a binding-driven key needs the binding
+     already stored (true for every existing user). */
+  $homeCanvasKeys = array_map(function ($x) { return $x['key']; }, jaxauth_canvas_widgets($user));
+  if ($homeSel !== '' && !in_array($homeSel, $homeCanvasKeys, true) && (!in_array($homeSel, $grants, true) || !in_array($homeSel, $homePageKeys, true))) { $homeSel = ''; }
   $oldHome = (string) get_user_meta($uid, 'jaxauth_home', true);
   if ($homeSel !== $oldHome) {
     if ($homeSel === '') { delete_user_meta($uid, 'jaxauth_home'); }
@@ -1157,6 +1162,19 @@ add_shortcode('jaxauth_user_canvas', function () {
        back to group 0, which is exactly the old behavior. */
     $savedG = isset($_COOKIE['jaxDashTab']) ? (int) $_COOKIE['jaxDashTab'] : 0;
     if ($savedG < 0 || $savedG >= count($groups)) { $savedG = 0; }
+    /* Ryan, Sep 4 2026: a user's stored home (jaxauth_home) names the tab the
+       canvas opens on at EVERY load - Sam Davis starts on Log Detailing. The
+       remembered-tab cookie only steers users who have no home set. */
+    $homeK = (string) get_user_meta($u->ID, 'jaxauth_home', true);
+    $homeG = -1;
+    if ($homeK !== '') {
+      $hgi = 0;
+      foreach ($groups as $hgw) {
+        foreach ($hgw as $hx) { if ($hx['key'] === $homeK) { $homeG = $hgi; } }
+        $hgi++;
+      }
+    }
+    if ($homeG > -1) { $savedG = $homeG; }
     $gi = 0; $tabsH = ''; $bodyH = '';
     foreach ($groups as $gl => $gw) {
       $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">' . esc_html($gl) . '</button>';
@@ -1183,6 +1201,7 @@ add_shortcode('jaxauth_user_canvas', function () {
       . 'for(var x=0;x<tabs.length;x++){(function(i){tabs[i].addEventListener("click",function(){act(i);});})(x);}'
       . 'function byHash(){var h=(window.location.hash||"").replace("#jaxw-","");if(!h){return -1;}for(var x=0;x<gs.length;x++){var ks=(gs[x].getAttribute("data-gkeys")||"").split(",");if(ks.indexOf(h)>-1){return x;}}return -1;}'
       . 'var st=0;try{st=parseInt(localStorage.getItem("jaxDashTab")||"0",10)||0;}catch(e){}if(st<0||st>=gs.length){st=0;}'
+      . 'var hm=' . (int) $homeG . ';if(hm>-1){st=hm;}'
       . 'var hi=byHash();act(hi>-1?hi:st);'
       . 'window.addEventListener("hashchange",function(){var i=byHash();if(i>-1){act(i);var el=document.getElementById("jaxw-"+((window.location.hash||"").replace("#jaxw-","")));if(el){el.scrollIntoView();}}});'
       . '})();</script>';
@@ -1547,11 +1566,18 @@ function jaxauth_admin_html() {
   $restBase = esc_url_raw(rest_url('jaxauth/v1/'));
   $reg = jaxauth_registry();
   $users = [];
+  /* Ryan, Sep 4 2026: Sam Davis is a 1099 detailer, not a CFI. The list chip
+     must say which kind of pay page a binding points at, so each row carries
+     'ct' (binding is in jaxpay_contractors - read only, never written here). */
+  $ctSlugs = get_option('jaxpay_contractors', array());
+  if (!is_array($ctSlugs)) { $ctSlugs = array(); }
   foreach (get_users(['role' => JAXAUTH_ROLE]) as $wu) {
+    $bSlug = (string) get_user_meta($wu->ID, 'jaxauth_instructor', true);
     $users[] = [
       'id' => $wu->ID, 'n' => $wu->display_name, 'e' => $wu->user_email,
       'g' => jaxauth_grants($wu->ID),
-      'b' => (string) get_user_meta($wu->ID, 'jaxauth_instructor', true),
+      'b' => $bSlug,
+      'ct' => ($bSlug !== '' && in_array(sanitize_title($bSlug), $ctSlugs, true)),
       'd' => !jaxauth_enabled($wu->ID),
       'ac' => array_values((array) get_user_meta($wu->ID, 'jaxown_aircraft', true)),
       'hm' => (string) get_user_meta($wu->ID, 'jaxauth_home', true),
@@ -1738,7 +1764,7 @@ function jaxauth_admin_html() {
     USERS.forEach(function(u){
       var b=document.createElement('button');b.className='urow'+(u.id===sel?' on':'');
       b.innerHTML='<span><b>'+esc(u.n)+'</b><span class="em">'+esc(u.e)+(u.d?' - disabled':'')+'</span></span>'
-        +'<span class="chip">'+(u.d?'OFF':(u.a?'ADMIN':(u.b?'CFI':'USER')))+'</span>';
+        +'<span class="chip">'+(u.d?'OFF':(u.a?'ADMIN':(u.b?(u.ct?'1099':'CFI'):'USER')))+'</span>';
       b.addEventListener('click',function(){sel=u.id;renderAll();});
       box.appendChild(b);
     });
