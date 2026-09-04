@@ -250,6 +250,36 @@ function jaxauth_log_add($txt) {
   update_option('jaxauth_log', $log, false);
 }
 
+/* -------------------- house design tokens --------------------
+
+   docs/DESIGN-SYSTEM.md is the single source of truth for colour, type and
+   radius. Every <style> this snippet prints opens with the token block below:
+   the sign-in page, the settings page, the Access admin (all three inside
+   srcdoc frames) and the User Canvas chrome, the hamburger pane and the
+   view-as banner (all three straight onto an Elementor page).
+
+   The six *-tint / *-line entries after --r-pill are the tinted alert surfaces
+   this snippet genuinely needs - the error box, the "Saved." box and the
+   temporary-password notice. They are lighter forms of --red / --green /
+   --amber with no token of their own. Names and values match the rest of the
+   fleet (jaxaero-instructor-pay.php and four other widgets declare the same
+   six) and are now written into DESIGN-SYSTEM.md, so the same surface renders
+   identically side by side. --scrim and --lift close the set: one backdrop and
+   one drop shadow for every overlay. Nothing else may invent a colour. */
+function jaxauth_tokens_css() {
+  return ':root{--ink:#1F2F54;--ink-d:#16223f;--ink2:#5b6577;--ink3:#8A93A5;--brand:#C10F1B;--gold:#C0A788;--ground:#F4F6F9;--panel:#FFFFFF;--hair:#e6e9ef;--hair2:#d9dee7;--track:#eef1f5;--tint:#F7F9FC;--green:#1e6b3a;--amber:#8a5a12;--red:#b23b3b;--shadow:0 1px 3px rgba(20,35,70,.05);--r-sm:8px;--r-md:10px;--r-lg:14px;--r-pill:999px;'
+    . '--red-tint:#FCEBEA;--red-line:#E3A6A4;--green-tint:#EAF5EE;--green-line:#BFE0C9;--amber-tint:#FBF3E1;--amber-line:#E7D3A6;'
+    . '--scrim:rgba(31,47,84,.55);--lift:0 12px 40px rgba(20,35,70,.25)}';
+}
+
+/* The one font stack. Every rule in this snippet takes it from here, so there
+   is exactly one place to change it. The single deliberate exception is the
+   temporary-password field in the Access admin, which stays monospace so a
+   random string can be read character by character. */
+function jaxauth_font_stack() {
+  return '"Segoe UI",Roboto,-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif';
+}
+
 /* -------------------- role -------------------- */
 
 add_action('init', function () {
@@ -432,12 +462,30 @@ function jaxauth_denied_html($mode = 'grant') {
     ? 'Payroll needs a JAXAERO account. The page password does not open it.'
     : 'If you think it should be, ask Ryan.';
   $link = ($mode === 'signin') ? 'Sign in' : 'Back to your dashboard';
-  return '<div style="max-width:480px;margin:40px auto;padding:24px;text-align:center;'
-    . 'font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1F2F54;'
-    . 'background:#fff;border:1px solid #e6e9ef;border-radius:14px">'
-    . '<b>' . esc_html($head) . '</b><br>'
-    . '<span style="font-size:13px;color:#5b6577">' . esc_html($sub) . '</span><br><br>'
-    . '<a href="' . $home . '" style="color:#C10F1B;font-weight:700;font-size:13px">' . esc_html($link) . '</a></div>';
+  /* House empty/error state (DESIGN-SYSTEM.md): the page header - brand mark,
+     navy title, grey sub, 3px gold rule - then ONE .mod card carrying the
+     sentence and the way out. Never a bare <em> or a naked <b>. The brand mark
+     is suppressed inside the User Canvas, which has already printed one.
+     This renders straight onto an Elementor page, so every declaration the
+     .elementor-kit-35 kit could repaint is pinned with !important. */
+  $css = '<style>' . jaxauth_tokens_css()
+    . '.jaxden{max-width:520px;margin:40px auto;padding:0 16px !important;font-family:' . jaxauth_font_stack() . ' !important;color:var(--ink) !important}'
+    . '.jaxden .jaxden-hd{border-bottom:3px solid var(--gold) !important;padding-bottom:9px;margin-bottom:14px}'
+    . '.jaxden .jaxden-brand{font-weight:800 !important;letter-spacing:.14em !important;font-size:13px !important;color:var(--brand) !important;text-transform:uppercase !important;line-height:1.2 !important}'
+    . '.jaxden .jaxden-t{margin:6px 0 4px !important;font-size:26px !important;font-weight:800 !important;letter-spacing:-.01em !important;color:var(--ink) !important;line-height:1.25 !important}'
+    . '.jaxden .jaxden-sub{color:var(--ink2) !important;font-size:13.5px !important;line-height:1.5 !important;margin-top:6px !important}'
+    . '.jaxden .jaxden-mod{background:var(--panel) !important;border:1px solid var(--hair) !important;border-radius:var(--r-lg) !important;padding:22px !important;box-shadow:var(--shadow) !important;color:var(--ink2) !important;font-size:13.5px !important;line-height:1.5 !important}'
+    . '.jaxden .jaxden-a{display:inline-block !important;margin-top:14px !important;padding:9px 16px !important;border-radius:var(--r-sm) !important;background:var(--ink) !important;border:1px solid var(--ink) !important;color:#fff !important;font-weight:700 !important;font-size:13.5px !important;text-decoration:none !important;letter-spacing:0 !important;text-transform:none !important}'
+    . '.jaxden .jaxden-a:hover{background:var(--ink-d) !important;border-color:var(--ink-d) !important;color:#fff !important}'
+    . '</style>';
+  return $css
+    . '<div class="jaxden"><div class="jaxden-hd">'
+    . (empty($GLOBALS['jaxauth_canvas_render']) ? '<div class="jaxden-brand">JAXAERO</div>' : '')
+    . '<div class="jaxden-t">' . esc_html($head) . '</div>'
+    . '<div class="jaxden-sub">JAXAERO portal &middot; widget access is set per person.</div>'
+    . '</div>'
+    . '<div class="jaxden-mod">' . esc_html($sub)
+    . '<br><a class="jaxden-a" href="' . $home . '">' . esc_html($link) . '</a></div></div>';
 }
 
 /* Password bypass: a signed-in user who holds the page key does not
@@ -1007,9 +1055,16 @@ function jaxauth_viewas_banner() {
   $name = $t ? $t->display_name : 'user';
   $exit = esc_url(add_query_arg('jaxviewas', 'off', home_url('/')));
   ?>
-<div style="position:fixed;left:0;right:0;bottom:0;z-index:2147483000;background:#7a4b00;color:#fff;font-family:'Segoe UI',Roboto,Arial,sans-serif;font-size:13.5px;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;box-shadow:0 -4px 16px rgba(0,0,0,.25)">
+<style>
+<?php echo jaxauth_tokens_css(); ?>
+.jaxva{position:fixed;left:0;right:0;bottom:0;z-index:2147483000;background:var(--amber) !important;color:#fff !important;font-family:<?php echo jaxauth_font_stack(); ?> !important;font-size:13.5px !important;line-height:1.5 !important;padding:10px 16px !important;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;box-shadow:0 -4px 16px rgba(0,0,0,.25)}
+.jaxva b{color:#fff !important;font-weight:800 !important}
+.jaxva .jaxva-x{color:#fff !important;background:rgba(255,255,255,.18) !important;border:1px solid rgba(255,255,255,.5) !important;border-radius:var(--r-sm) !important;padding:5px 14px !important;font-weight:700 !important;font-size:13px !important;text-decoration:none !important;letter-spacing:0 !important;text-transform:none !important}
+.jaxva .jaxva-x:hover{background:rgba(255,255,255,.3) !important;color:#fff !important}
+</style>
+<div class="jaxva">
   <span>Preview: you are seeing the portal exactly as <b><?php echo esc_html($name); ?></b> sees it. Buttons that save or send will not work in this preview.</span>
-  <a href="<?php echo $exit; ?>" style="color:#fff !important;background:rgba(255,255,255,.18) !important;border:1px solid rgba(255,255,255,.5) !important;border-radius:8px !important;padding:5px 14px !important;font-weight:700 !important;text-decoration:none !important">Exit preview</a>
+  <a class="jaxva-x" href="<?php echo $exit; ?>">Exit preview</a>
 </div>
   <?php
 }
@@ -1157,7 +1212,26 @@ add_shortcode('jaxauth_user_canvas', function () {
   if (!jaxauth_is_admin($u) && !jaxauth_is_managed($u)) { return ''; }
   if (!jaxauth_is_admin($u) && !jaxauth_enabled($u->ID)) { return ''; }
   $tags = jaxauth_canvas_widgets($u);
-  if (!$tags) { return '<div style="max-width:480px;margin:40px auto;padding:24px;text-align:center;font-family:Segoe UI,Roboto,Arial,sans-serif;color:#1F2F54;background:#fff;border:1px solid #e6e9ef;border-radius:14px"><b>Nothing is switched on for your account yet.</b><br><span style="font-size:13px;color:#5b6577">Ask Ryan.</span></div>'; }
+  /* House empty state: the page header - brand mark, navy title, grey sub,
+     3px gold rule - then one .mod sentence saying who fixes it. Nothing has
+     printed a greeting above it, so the brand mark stays. Rendered onto an
+     Elementor page, so the kit-repaintable declarations are pinned. */
+  if (!$tags) {
+    return '<style>' . jaxauth_tokens_css()
+      . '.jaxcv-empty{max-width:1080px;margin:20px auto 24px;padding:0 16px;font-family:' . jaxauth_font_stack() . ' !important;color:var(--ink) !important}'
+      . '.jaxcv-empty .jaxcv-hd{border-bottom:3px solid var(--gold) !important;padding-bottom:9px;margin-bottom:14px}'
+      . '.jaxcv-empty .jaxcv-brand{font-weight:800 !important;letter-spacing:.14em !important;font-size:13px !important;color:var(--brand) !important;line-height:1.2 !important}'
+      . '.jaxcv-empty .jaxcv-t{margin:6px 0 4px !important;font-size:26px !important;font-weight:800 !important;letter-spacing:-.01em !important;color:var(--ink) !important;line-height:1.25 !important}'
+      . '.jaxcv-empty .jaxcv-sub{color:var(--ink2) !important;font-size:13.5px !important;line-height:1.5 !important;margin-top:6px !important}'
+      . '.jaxcv-empty .jaxcv-mod{background:var(--panel) !important;border:1px solid var(--hair) !important;border-radius:var(--r-lg) !important;padding:22px !important;box-shadow:var(--shadow) !important;color:var(--ink2) !important;font-size:13.5px !important;line-height:1.5 !important}'
+      . '</style>'
+      . '<div class="jaxcv-empty"><div class="jaxcv-hd">'
+      . (empty($GLOBALS['jaxauth_canvas_render']) ? '<div class="jaxcv-brand">JAXAERO</div>' : '')
+      . '<div class="jaxcv-t">Nothing is switched on for your account yet.</div>'
+      . '<div class="jaxcv-sub">Your dashboard is built from the widgets turned on for you in Access admin.</div>'
+      . '</div>'
+      . '<div class="jaxcv-mod">Ask Ryan to switch on the widgets you need and they will appear here on your next sign-in.</div></div>';
+  }
   /* Ryan, Aug 31 PM: the welcome appears exactly ONCE, at the top of the
      canvas. Widgets suppress their own greeting while this flag is up (they
      keep it on standalone pages). */
@@ -1165,10 +1239,22 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* Ryan, Sep 4 2026: a company account (the VR Leasing lessor login, grants exactly
      ['lessor']) is greeted by its full name, not by "VR". */
   if (function_exists('jaxauth_grants') && jaxauth_grants($u->ID) === array('lessor')) { $first = trim((string) $u->display_name); }
-  $html = '<style>div[id^="jaxw-"]{scroll-margin-top:72px}</style>';
-  $html .= '<div style="max-width:1080px;margin:20px auto 4px;padding:0 16px;font-family:\'Segoe UI\',Roboto,Arial,sans-serif">'
-        . '<div style="color:#C10F1B;font-weight:800;font-size:12px;letter-spacing:.12em">JAXAERO</div>'
-        . '<h1 style="font-size:28px;font-weight:800;color:#1F2F54;margin:2px 0 0">Welcome ' . esc_html($first !== '' ? $first : $u->display_name) . '!</h1>'
+  /* Ryan, Sep 4 2026 (design pass): the greeting keeps exactly the behaviour it
+     had - one welcome, printed once, brand mark above it - and now draws its
+     colours and its type from the house tokens (brand mark 13/800/.14em, title
+     26/800/-.01em). It deliberately does NOT grow a gold rule: the widget
+     directly beneath it prints its own, and two rules a few pixels apart read
+     as a mistake. This block lands on an Elementor page, so it is pinned. */
+  $html = '<style>' . jaxauth_tokens_css()
+        . 'div[id^="jaxw-"]{scroll-margin-top:72px}'
+        . '.jaxcv-greet{max-width:1080px;margin:20px auto 4px;padding:0 16px;font-family:' . jaxauth_font_stack() . ' !important}'
+        . '.jaxcv-greet .jaxcv-brand{color:var(--brand) !important;font-weight:800 !important;font-size:13px !important;letter-spacing:.14em !important;line-height:1.2 !important;text-transform:uppercase !important}'
+        . '.jaxcv-greet h1{font-size:26px !important;font-weight:800 !important;color:var(--ink) !important;letter-spacing:-.01em !important;margin:4px 0 0 !important;line-height:1.25 !important}'
+        . '.jaxcv-ph{font-family:' . jaxauth_font_stack() . ' !important;color:var(--ink3) !important;font-size:13px !important;padding:40px 0;line-height:1.5}'
+        . '</style>';
+  $html .= '<div class="jaxcv-greet">'
+        . '<div class="jaxcv-brand">JAXAERO</div>'
+        . '<h1>Welcome ' . esc_html($first !== '' ? $first : $u->display_name) . '!</h1>'
         . '</div>';
   /* Ryan, Aug 31 late: lazy canvas. A ?jaxw=<key> request returns ONLY that
      widget, rendered through the same identity/gate path as any page load
@@ -1211,7 +1297,7 @@ add_shortcode('jaxauth_user_canvas', function () {
   $lazyKeys = array();
   $phFn = function ($t) {
     return '<div id="jaxw-' . esc_attr($t['key']) . '" class="jaxw-lazy" data-jaxw="' . esc_attr($t['key']) . '" style="min-height:340px;display:flex;align-items:center;justify-content:center">'
-         . '<div style="font-family:\'Segoe UI\',Roboto,Arial,sans-serif;color:#8A93A5;font-size:13px;padding:40px 0">Loading ' . esc_html($t['label']) . '&hellip;</div>'
+         . '<div class="jaxcv-ph">Loading ' . esc_html($t['label']) . '&hellip;</div>'
          . '</div>';
   };
   if (!$isDash) {
@@ -1224,21 +1310,33 @@ add_shortcode('jaxauth_user_canvas', function () {
       }
     }
   } else {
-    $html .= '<style>.jaxdash-tabs{display:flex;gap:8px;flex-wrap:wrap;max-width:1080px;margin:14px auto 4px;padding:0 16px;font-family:\'Segoe UI\',Roboto,Arial,sans-serif}'
-           . '.jaxdash-tab{font:700 13.5px \'Segoe UI\',Roboto,Arial,sans-serif !important;padding:9px 18px !important;border:1px solid #d9dee7 !important;background:#fff !important;border-radius:999px !important;cursor:pointer;color:#1F2F54 !important;letter-spacing:0 !important;text-transform:none !important;box-shadow:none !important;min-width:0 !important;width:auto !important;line-height:1.2 !important}'
-           . '.jaxdash-tab.on{background:#1F2F54 !important;color:#fff !important;border-color:#1F2F54 !important}'
+    /* The token block is declared once per document, in the greeting <style>
+       above, which is always printed before this one - so these rules just
+       reference the variables. */
+    $html .= '<style>.jaxdash-tabs{display:flex;gap:8px;flex-wrap:wrap;max-width:1080px;margin:14px auto 4px;padding:0 16px;font-family:' . jaxauth_font_stack() . '}'
+           . '.jaxdash-tab{font:700 13.5px ' . jaxauth_font_stack() . ' !important;padding:9px 18px !important;border:1px solid var(--hair2) !important;background:var(--panel) !important;border-radius:var(--r-pill) !important;cursor:pointer;color:var(--ink) !important;letter-spacing:0 !important;text-transform:none !important;box-shadow:none !important;min-width:0 !important;width:auto !important;line-height:1.2 !important}'
+           . '.jaxdash-tab:hover{background:var(--tint) !important}'
+           . '.jaxdash-tab.on{background:var(--ink) !important;color:#fff !important;border-color:var(--ink) !important}'
            . '.jaxdash-g{display:none}.jaxdash-g.on{display:block}'
            /* Ryan, Sep 4 2026 (lease): the department sub-menu strip - snippet 9's
-              Pay Portal .ptabs/.ptab treatment (grey #6b7484, navy #1F2F54 on,
-              red #C10F1B underline). It renders OUTSIDE any iframe, so every
+              Pay Portal .ptabs/.ptab treatment (grey --ink2, navy --ink on,
+              --brand underline). It renders OUTSIDE any iframe, so every
               declaration Elementor's kit could repaint is pinned. */
-           . '.jaxsub{display:flex !important;flex-wrap:wrap;gap:2px;max-width:1080px;margin:8px auto 0 !important;padding:0 16px !important;border-bottom:1px solid #e6e9ef;box-sizing:border-box;font-family:\'Segoe UI\',Roboto,Arial,sans-serif}'
-           . '.jaxsub .ptab{font:700 13.5px \'Segoe UI\',Roboto,Arial,sans-serif !important;padding:9px 16px !important;border:0 !important;border-bottom:3px solid transparent !important;margin:0 0 -1px !important;background:none !important;border-radius:0 !important;box-shadow:none !important;color:#6b7484 !important;cursor:pointer;white-space:nowrap;letter-spacing:0 !important;text-transform:none !important;min-width:0 !important;width:auto !important;line-height:1.2 !important}'
-           . '.jaxsub .ptab:hover{color:#1F2F54 !important}'
-           . '.jaxsub .ptab.on{color:#1F2F54 !important;border-bottom-color:#C10F1B !important}'
+           . '.jaxsub{display:flex !important;flex-wrap:wrap;gap:2px;max-width:1080px;margin:8px auto 0 !important;padding:0 16px !important;border-bottom:1px solid var(--hair);box-sizing:border-box;font-family:' . jaxauth_font_stack() . '}'
+           . '.jaxsub .ptab{font:700 13.5px ' . jaxauth_font_stack() . ' !important;padding:9px 16px !important;border:0 !important;border-bottom:3px solid transparent !important;margin:0 0 -1px !important;background:none !important;border-radius:0 !important;box-shadow:none !important;color:var(--ink2) !important;cursor:pointer;white-space:nowrap;letter-spacing:0 !important;text-transform:none !important;min-width:0 !important;width:auto !important;line-height:1.2 !important}'
+           . '.jaxsub .ptab:hover{color:var(--ink) !important}'
+           . '.jaxsub .ptab.on{color:var(--ink) !important;border-bottom-color:var(--brand) !important}'
            . '.jaxsub-rule{max-width:1080px;margin:14px auto 0 !important;padding:0 16px;box-sizing:border-box}'
-           . '.jaxsub-rule i{display:block;height:3px;background:#C0A788;border-radius:2px}'
-           . '.jaxsub-p{display:none}.jaxsub-p.on{display:block}</style>';
+           . '.jaxsub-rule i{display:block;height:3px;background:var(--gold)}'
+           . '.jaxsub-p{display:none}.jaxsub-p.on{display:block}'
+           /* the MX "coming soon" bubble is an empty state, so it gets the house
+              header (title, grey sub, gold rule) and one .mod sentence */
+           . '.jaxmx{max-width:1080px;margin:22px auto 30px;padding:0 16px;font-family:' . jaxauth_font_stack() . ' !important;color:var(--ink) !important}'
+           . '.jaxmx .jaxmx-hd{border-bottom:3px solid var(--gold) !important;padding-bottom:9px;margin-bottom:14px}'
+           . '.jaxmx .jaxmx-t{font-size:26px !important;font-weight:800 !important;letter-spacing:-.01em !important;color:var(--ink) !important;margin:0 !important;line-height:1.25 !important}'
+           . '.jaxmx .jaxmx-sub{color:var(--ink2) !important;font-size:13.5px !important;line-height:1.5 !important;margin-top:6px !important}'
+           . '.jaxmx .jaxmx-mod{background:var(--panel) !important;border:1px solid var(--hair) !important;border-radius:var(--r-lg) !important;padding:22px !important;box-shadow:var(--shadow) !important;color:var(--ink2) !important;font-size:13.5px !important;line-height:1.5 !important}'
+           . '</style>';
     /* Ryan, Sep 2 (Tier 1): inline the SAVED tab's first widget, not always
        group 0's - act() mirrors the shown tab into a cookie so a returning
        Payroll user gets Payroll at first paint. Invalid/absent cookie falls
@@ -1306,7 +1404,10 @@ add_shortcode('jaxauth_user_canvas', function () {
     }
     if (jaxauth_is_admin($u) && !isset($groups['MX'])) {
       $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">MX</button>';
-      $bodyH .= '<div class="jaxdash-g" id="jaxg-' . $gi . '" data-gkeys=""><div style="max-width:1080px;margin:30px auto;padding:46px 16px;text-align:center;font-family:\'Segoe UI\',Roboto,Arial,sans-serif;color:#1F2F54;background:#fff;border:1px solid #e6e9ef;border-radius:14px"><b style="font-size:20px">MX portal coming soon!</b><br><span style="font-size:13.5px;color:#5b6577">Maintenance department tools will live here.</span></div></div>';
+      $bodyH .= '<div class="jaxdash-g" id="jaxg-' . $gi . '" data-gkeys="">'
+        . '<div class="jaxmx"><div class="jaxmx-hd"><div class="jaxmx-t">MX portal coming soon!</div>'
+        . '<div class="jaxmx-sub">Maintenance department tools will live here.</div></div>'
+        . '<div class="jaxmx-mod">Nothing to show yet. The mechanic timeclock, task mix and MX pay views land in this tab when they are built.</div></div></div>';
     }
     $html .= '<div class="jaxdash-tabs" id="jaxdashTabs">' . $tabsH . '</div>' . $bodyH;
     $html .= '<script>(function(){var tabs=document.querySelectorAll(".jaxdash-tab");var gs=document.querySelectorAll(".jaxdash-g");'
@@ -1408,22 +1509,24 @@ function jaxauth_menu_footer() {
   if ($cvsUrl) { $mnuW = jaxauth_canvas_widgets($u); }
   ?>
 <style>
-.jaxmnu-btn{position:fixed;top:12px;right:12px;z-index:99990;width:42px !important;height:42px !important;min-width:0 !important;border-radius:10px !important;border:1px solid #d9dee7 !important;background:#fff !important;box-shadow:0 2px 10px rgba(20,35,70,.18) !important;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 !important;line-height:1 !important}
-.jaxmnu-btn span{display:block;width:18px;height:2px;background:#1F2F54;border-radius:2px;position:relative}
-.jaxmnu-btn span:before,.jaxmnu-btn span:after{content:'';position:absolute;left:0;width:18px;height:2px;background:#1F2F54;border-radius:2px}
+<?php echo jaxauth_tokens_css(); ?>
+.jaxmnu-btn{position:fixed;top:12px;right:12px;z-index:99990;width:42px !important;height:42px !important;min-width:0 !important;border-radius:var(--r-md) !important;border:1px solid var(--hair2) !important;background:var(--panel) !important;box-shadow:0 2px 10px rgba(20,35,70,.18) !important;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 !important;line-height:1 !important}
+.jaxmnu-btn span{display:block;width:18px;height:2px;background:var(--ink);position:relative}
+.jaxmnu-btn span:before,.jaxmnu-btn span:after{content:'';position:absolute;left:0;width:18px;height:2px;background:var(--ink)}
 .jaxmnu-btn span:before{top:-6px}.jaxmnu-btn span:after{top:6px}
-.jaxmnu-pane{position:fixed;top:60px;right:12px;z-index:99990;width:min(300px,calc(100vw - 24px));background:#fff;border:1px solid #e6e9ef;border-radius:14px;box-shadow:0 14px 44px rgba(15,23,42,.28);display:none;overflow:hidden;font-family:"Segoe UI",Roboto,Arial,sans-serif}
+.jaxmnu-pane{position:fixed;top:60px;right:12px;z-index:99990;width:min(300px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-lg);box-shadow:var(--lift);display:none;overflow:hidden;font-family:<?php echo jaxauth_font_stack(); ?>}
 .jaxmnu-pane.on{display:block}
 body.admin-bar .jaxmnu-btn{top:44px}body.admin-bar .jaxmnu-pane{top:92px}
-.jaxmnu-hd{padding:12px 16px 10px;border-bottom:1px solid #eef1f5;font-weight:800;color:#C10F1B;font-size:12px;letter-spacing:.12em}
-.jaxmnu-pane a,.jaxmnu-pane button.jaxmnu-item{display:block !important;width:100% !important;min-width:0 !important;text-align:left !important;background:none !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;padding:11px 16px !important;font:inherit !important;font-size:14px !important;font-weight:400 !important;color:#1F2F54 !important;text-decoration:none !important;letter-spacing:0 !important;text-transform:none !important;cursor:pointer}
-.jaxmnu-pane a:hover,.jaxmnu-pane button.jaxmnu-item:hover{background:#F4F6F9 !important;color:#1F2F54 !important}
-.jaxmnu-sep{border-top:1px solid #eef1f5;margin:4px 0}
+.jaxmnu-hd{padding:12px 16px 10px;border-bottom:1px solid var(--hair);font-weight:800 !important;color:var(--brand) !important;font-size:13px !important;letter-spacing:.14em !important;text-transform:uppercase !important;line-height:1.2 !important}
+.jaxmnu-pane a,.jaxmnu-pane button.jaxmnu-item{display:block !important;width:100% !important;min-width:0 !important;text-align:left !important;background:none !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;padding:11px 16px !important;font:inherit !important;font-size:13.5px !important;font-weight:400 !important;color:var(--ink) !important;text-decoration:none !important;letter-spacing:0 !important;text-transform:none !important;cursor:pointer}
+.jaxmnu-pane a:hover,.jaxmnu-pane button.jaxmnu-item:hover{background:var(--ground) !important;color:var(--ink) !important}
+.jaxmnu-sep{border-top:1px solid var(--hair);margin:4px 0}
 .jaxmnu-help{display:none;padding:10px 16px 14px}
 .jaxmnu-help.on{display:block}
-.jaxmnu-help textarea{width:100% !important;min-height:76px;font:inherit !important;font-size:13.5px !important;padding:8px 10px !important;border:1px solid #d9dee7 !important;border-radius:8px !important;background:#fff !important;color:#1F2F54 !important;box-sizing:border-box !important}
-.jaxmnu-help .jaxmnu-send{margin-top:8px;background:#1F2F54 !important;color:#fff !important;border:0 !important;border-radius:8px !important;box-shadow:none !important;width:auto !important;min-width:0 !important;padding:8px 16px !important;font:inherit !important;font-size:13px !important;font-weight:700 !important;letter-spacing:0 !important;text-transform:none !important;cursor:pointer}
-.jaxmnu-note{font-size:12px;padding:0 16px 10px;color:#5b6577}
+.jaxmnu-help textarea{width:100% !important;min-height:76px;font:inherit !important;font-size:13.5px !important;padding:8px 10px !important;border:1px solid var(--hair2) !important;border-radius:var(--r-sm) !important;background:var(--panel) !important;color:var(--ink) !important;box-sizing:border-box !important}
+.jaxmnu-help .jaxmnu-send{margin-top:8px;background:var(--ink) !important;color:#fff !important;border:1px solid var(--ink) !important;border-radius:var(--r-sm) !important;box-shadow:none !important;width:auto !important;min-width:0 !important;padding:9px 16px !important;font:inherit !important;font-size:13px !important;font-weight:700 !important;letter-spacing:0 !important;text-transform:none !important;cursor:pointer}
+.jaxmnu-help .jaxmnu-send:hover{background:var(--ink-d) !important;border-color:var(--ink-d) !important;color:#fff !important}
+.jaxmnu-note{font-size:12.5px;padding:0 16px 10px;color:var(--ink2)}
 </style>
 <button type="button" class="jaxmnu-btn" id="jaxmnuBtn" aria-label="Menu" aria-expanded="false"><span></span></button>
 <div class="jaxmnu-pane" id="jaxmnuPane" role="menu">
@@ -1493,44 +1596,76 @@ function jaxauth_iframe($html, $fid, $title) {
 }
 
 function jaxauth_frame_head() {
+  /* The shared head for the three srcdoc documents this snippet renders - the
+     sign-in page, the user settings page and the Access admin. It opens with
+     the house token block (docs/DESIGN-SYSTEM.md) and then defines only house
+     components: the .hd page header, the .mod card, .b1/.b2 buttons, the table
+     and the three alert surfaces. No rule below invents a colour, a radius or
+     a font stack. Inside a frame there is no Elementor kit to fight, so
+     nothing here needs an !important pin.
+     The bare .brand / h1 / .sub rules below the .hd block are a deliberate
+     fallback for any header that is not wrapped in .hd. Every header in the
+     three frame documents today IS wrapped, so .hd .brand / .hd h1 / .hd .sub
+     win on specificity in every current case and the bare rules paint nothing.
+     Keep them or delete them as a pair with that fact in mind.
+     .btn / .btn.ghost / .btn.red are kept as aliases of .b1 / .b2 so any
+     markup that still carries the old class name renders identically - this
+     is the sign-in page, and a missed class must not become a dead button.
+     Note the alias is not value-neutral: .btn.red resolves to the navy .b1
+     fill, so legacy "btn red" markup injected from elsewhere would change
+     meaning, not just colour.
+     Remove the .btn aliases after one clean deploy - grep confirmed zero .btn
+     markup in this file on Sep 4 2026. */
   return '<!doctype html><html lang="en"><head><meta charset="utf-8">'
     . '<meta name="viewport" content="width=device-width,initial-scale=1"><style>'
+    . jaxauth_tokens_css()
     . '*{box-sizing:border-box}'
-    . 'body{margin:0;background:#F4F6F9;color:#1F2F54;font-family:"Segoe UI",Roboto,-apple-system,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5}'
-    . '.wrap{max-width:980px;margin:0 auto;padding:22px 18px 34px}'
-    . '.brand{font-weight:800;letter-spacing:.14em;font-size:13px;color:#C10F1B}'
-    . 'h1{margin:6px 0 4px;font-size:24px;font-weight:800}'
-    . '.sub{color:#5b6577;font-size:13.5px;margin-bottom:16px}'
-    . '.mod{background:#fff;border:1px solid #e6e9ef;border-radius:14px;padding:22px;box-shadow:0 1px 3px rgba(20,35,70,.05);margin-bottom:14px}'
+    . 'body{margin:0;background:var(--ground);color:var(--ink);font-family:' . jaxauth_font_stack() . ';font-size:15px;line-height:1.5}'
+    . '.wrap{max-width:1080px;margin:0 auto;padding:6px 20px 14px}'
+    . '.hd{border-bottom:3px solid var(--gold);padding-bottom:9px;margin-bottom:14px}'
+    . '.hd .brand{display:block;font-weight:800;letter-spacing:.14em;font-size:13px;color:var(--brand);text-transform:uppercase}'
+    . '.hd h1{margin:6px 0 4px;font-size:26px;color:var(--ink);font-weight:800;letter-spacing:-.01em;line-height:1.25}'
+    . '.hd .sub{color:var(--ink2);font-size:13.5px;line-height:1.5;margin-top:6px}'
+    . '.brand{font-weight:800;letter-spacing:.14em;font-size:13px;color:var(--brand)}'
+    . 'h1{margin:6px 0 4px;font-size:26px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}'
+    . '.sub{color:var(--ink2);font-size:13.5px;line-height:1.5}'
+    . '.mod{background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-lg);padding:22px;box-shadow:var(--shadow);margin:0 0 18px}'
+    . '.cardh,.mod>b:first-child{display:block;font-size:15.5px;font-weight:700;color:var(--ink);margin-bottom:4px}'
     . '.fld{margin-bottom:13px}'
-    . '.fld label{display:block;font-size:12px;font-weight:700;letter-spacing:.04em;color:#5b6577;margin-bottom:5px;text-transform:uppercase}'
-    . '.fld input,.fld select{width:100%;border:1px solid #e6e9ef;border-radius:9px;padding:10px 12px;font-size:15px;color:#1F2F54;background:#fff}'
-    . '.btn{display:inline-block;border:0;border-radius:9px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;background:#1F2F54;color:#fff}'
-    . '.btn.red{background:#C10F1B}.btn.ghost{background:#fff;color:#1F2F54;border:1px solid #e6e9ef;font-weight:600}'
-    . '.btn:disabled{opacity:.55;cursor:default}'
-    . '.err{display:none;background:#fbe9ea;border:1px solid #f0c4c7;color:#8f1219;border-radius:9px;padding:10px 12px;font-size:13.5px;margin-bottom:12px}'
+    . '.fld label{display:block;font-size:11.5px;font-weight:800;letter-spacing:.08em;color:var(--ink2);margin-bottom:5px;text-transform:uppercase}'
+    . '.fld input,.fld select,.fld textarea{width:100%;border:1px solid var(--hair2);border-radius:var(--r-sm);padding:10px 12px;font:inherit;font-size:15px;color:var(--ink);background:var(--panel)}'
+    . '.b1,.b2,.btn{display:inline-block;border-radius:var(--r-sm);padding:9px 16px;font:inherit;font-size:13.5px;font-weight:700;line-height:1.2;cursor:pointer;text-decoration:none}'
+    . '.b1,.btn,.btn.red{background:var(--ink);color:#fff;border:1px solid var(--ink)}'
+    . '.b1:hover,.btn:hover,.btn.red:hover{background:var(--ink-d);border-color:var(--ink-d);color:#fff}'
+    . '.b2,.btn.ghost{background:var(--panel);color:var(--ink);border:1px solid var(--hair2)}'
+    . '.b2:hover,.btn.ghost:hover{background:var(--tint);color:var(--ink)}'
+    /* destructive: --red text on white, never a red fill (DESIGN-SYSTEM.md) */
+    . '.bdel,.bdel:hover{color:var(--red)}'
+    . '.b1:disabled,.b2:disabled,.btn:disabled{opacity:.45;cursor:default}'
+    . '.err{display:none;background:var(--red-tint);border:1px solid var(--red-line);color:var(--red);border-radius:var(--r-md);padding:10px 12px;font-size:13.5px;margin-bottom:12px}'
     . '.err.on{display:block}'
-    . '.okmsg{display:none;background:#e3f5ec;border:1px solid #bfe8d2;color:#0f7a4d;border-radius:9px;padding:10px 12px;font-size:13.5px;margin-bottom:12px}'
+    . '.okmsg{display:none;background:var(--green-tint);border:1px solid var(--green-line);color:var(--green);border-radius:var(--r-md);padding:10px 12px;font-size:13.5px;margin-bottom:12px}'
     . '.okmsg.on{display:block}'
-    . '.note{background:#fdf3e2;border:1px solid #f0dcb2;color:#8a5b00;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:12px}'
-    . '.small{font-size:12.5px;color:#5b6577}'
+    . '.note{background:var(--amber-tint);border:1px solid var(--amber-line);color:var(--amber);border-radius:var(--r-md);padding:10px 12px;font-size:13px;margin-bottom:12px}'
+    . '.small{font-size:12.5px;color:var(--ink2)}'
     . 'table{width:100%;border-collapse:collapse}'
-    . 'th{text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#8b93a3;font-weight:700;padding:7px 9px;border-bottom:1px solid #e6e9ef}'
-    . 'td{padding:8px 9px;border-bottom:1px solid #e6e9ef;font-size:13.5px;vertical-align:middle}'
+    . 'th{text-align:left;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);font-weight:800;padding:7px 9px;border-bottom:1px solid var(--hair);background:var(--tint)}'
+    . 'td{padding:8px 9px;border-bottom:1px solid var(--hair);font-size:13.5px;vertical-align:middle}'
     . '.ulist{max-height:560px;overflow-y:auto}'
-    . '.urow{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:0;border-radius:9px;padding:8px 9px;cursor:pointer;font:inherit;color:#1F2F54}'
-    . '.urow:hover{background:#F4F6F9}.urow.on{background:#1F2F54;color:#fff}'
-    . '.urow .em{display:block;font-size:11.5px;color:#5b6577}.urow.on .em{color:#c6cddd}'
-    . '.chip{margin-left:auto;font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 8px;background:#eef1f5;color:#5b6577}'
+    . '.urow{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:0;border-radius:var(--r-sm);padding:8px 9px;cursor:pointer;font:inherit;color:var(--ink)}'
+    . '.urow:hover{background:var(--ground)}.urow.on{background:var(--ink);color:#fff}'
+    . '.urow>span:first-child{min-width:0;overflow:hidden}'
+    . '.urow .em{display:block;font-size:11.5px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.urow.on .em{color:rgba(255,255,255,.72)}'
+    . '.chip{margin-left:auto;font-size:11.5px;font-weight:800;letter-spacing:.04em;border-radius:var(--r-pill);padding:2px 8px;background:var(--track);color:var(--ink2)}'
     . '.urow.on .chip{background:rgba(255,255,255,.16);color:#fff}'
     . '.grid2{display:grid;grid-template-columns:270px 1fr;gap:14px;align-items:start}'
     . '@media(max-width:820px){.grid2{grid-template-columns:1fr}}'
-    . '.tg{position:relative;width:42px;height:24px;border-radius:999px;border:0;cursor:pointer;background:#cfd5df}'
-    . '.tg:after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.18)}'
-    . '.tg.on{background:#0f7a4d}.tg.on:after{left:21px}'
-    . '.hstar{background:none;border:0;cursor:pointer;font:inherit;font-size:16px;line-height:1;color:#c8cfda;padding:0 3px;margin-left:4px;vertical-align:middle}.hstar.on{color:#E8A100}'
-    . '.arow{display:flex;gap:12px;padding:8px 2px;border-top:1px solid #e6e9ef;font-size:13px}'
-    . '.arow time{flex:none;width:120px;color:#8b93a3;font-size:12px}'
+    . '.tg{position:relative;width:42px;height:24px;border-radius:var(--r-pill);border:0;cursor:pointer;background:var(--ink3)}'
+    . '.tg:after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--panel);box-shadow:0 1px 2px rgba(0,0,0,.18)}'
+    . '.tg.on{background:var(--green)}.tg.on:after{left:21px}'
+    . '.hstar{background:none;border:0;cursor:pointer;font:inherit;font-size:16px;line-height:1;color:var(--ink3);padding:0 3px;margin-left:4px;vertical-align:middle}.hstar.on{color:var(--gold)}'
+    . '.arow{display:flex;gap:12px;padding:8px 2px;border-top:1px solid var(--hair);font-size:13px}'
+    . '.arow time{flex:none;width:120px;color:var(--ink3);font-size:12.5px;font-variant-numeric:tabular-nums}'
     . '</style></head><body>';
 }
 
@@ -1555,18 +1690,21 @@ function jaxauth_login_html() {
   $rest = esc_url_raw(rest_url('jaxauth/v1/login'));
   ob_start(); ?>
 <?php echo jaxauth_frame_head(); ?>
-<div class="wrap" style="max-width:420px">
-  <div style="text-align:center"><span class="brand">JAXAERO</span></div>
-  <h1 style="text-align:center;font-size:20px">Sign in to your dashboard</h1>
-  <div class="mod" style="margin-top:14px">
+<div class="wrap" style="max-width:440px">
+  <div class="hd" style="text-align:center">
+    <?php if (empty($GLOBALS['jaxauth_canvas_render'])): ?><span class="brand">JAXAERO</span><?php endif; ?>
+    <h1>Sign in to your dashboard</h1>
+    <div class="sub">Your dashboards, pay and documents in one place.</div>
+  </div>
+  <div class="mod">
     <div class="err" id="err"></div>
     <div class="fld"><label for="em">Email or sign-in name</label>
       <input id="em" type="text" autocomplete="username" placeholder="you@flyjaxaero.com" inputmode="email" autocapitalize="none" spellcheck="false"></div>
     <div class="fld"><label for="pw">Password</label>
       <input id="pw" type="password" autocomplete="current-password"></div>
-    <button class="btn red" id="go" style="width:100%">Sign in</button>
+    <button class="b1" id="go" style="width:100%">Sign in</button>
   </div>
-  <p class="small" style="text-align:center;line-height:1.55">Forgot your password? <a href="<?= esc_url(wp_lostpassword_url()) ?>" target="_top" style="color:#1F2F54;font-weight:700">Reset it by email</a>.<br>Five failed attempts locks sign-in for 15 minutes.<br>This page never asks for a Flight Schedule Pro login.</p>
+  <p class="small" style="text-align:center;line-height:1.55">Forgot your password? <a href="<?= esc_url(wp_lostpassword_url()) ?>" target="_top" style="color:var(--ink);font-weight:700">Reset it by email</a>.<br>Five failed attempts locks sign-in for 15 minutes.<br>This page never asks for a Flight Schedule Pro login.</p>
 </div>
 <script>
 (function(){
@@ -1606,26 +1744,28 @@ function jaxauth_home_html($u) {
 <?php echo jaxauth_frame_head(); ?>
 
 <div class="wrap">
-  <span class="brand">JAXAERO</span>
-  <h1>Welcome, <?php echo esc_html($u->display_name); ?></h1>
-  <div class="sub">Your account preferences. Signed in as <?php echo esc_html((string) $u->user_email !== '' ? $u->user_email : $u->user_login); ?>.
-    <button class="btn ghost" id="out" style="padding:9px 16px;font-size:13px;margin-left:8px;vertical-align:middle">Sign out</button></div>
+  <div class="hd">
+    <?php if (empty($GLOBALS['jaxauth_canvas_render'])): ?><span class="brand">JAXAERO</span><?php endif; ?>
+    <h1>Welcome, <?php echo esc_html($u->display_name); ?></h1>
+    <div class="sub">Your account preferences. Signed in as <?php echo esc_html((string) $u->user_email !== '' ? $u->user_email : $u->user_login); ?>.</div>
+  </div>
+  <div style="margin:0 0 14px"><button class="b2" id="out" style="padding:9px 16px;font-size:13px">Sign out</button></div>
   <?php if ($must) { ?><div class="note"><b>Please choose a new password now.</b> The one you signed in with was temporary.</div><?php } ?>
-  <div class="mod" id="chpw" style="margin-top:16px;max-width:430px">
+  <div class="mod" id="chpw" style="max-width:430px">
     <b>Change your password</b>
     <div class="small" style="margin-bottom:10px">At least <?php echo (int) JAXAUTH_MIN_PW; ?> characters. Takes effect immediately.</div>
     <div class="err" id="perr"></div><div class="okmsg" id="pok">Password changed.</div>
     <div class="fld"><label for="cur">Current password</label><input id="cur" type="password" autocomplete="current-password"></div>
     <div class="fld"><label for="nw">New password</label><input id="nw" type="password" autocomplete="new-password"></div>
     <div class="fld"><label for="nw2">New password again</label><input id="nw2" type="password" autocomplete="new-password"></div>
-    <button class="btn" id="pgo">Change password</button>
+    <button class="b1" id="pgo">Change password</button>
   </div>
-  <div class="mod" id="helpmod" style="margin-top:16px;max-width:430px">
+  <div class="mod" id="helpmod" style="max-width:430px">
     <b>Request help</b>
     <div class="small" style="margin-bottom:10px">Describe the problem - this goes straight to Ryan by email.</div>
     <div class="err" id="herr"></div><div class="okmsg" id="hok">Sent - Ryan has it in his inbox.</div>
-    <div class="fld"><textarea id="htxt" rows="4" style="width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;padding:8px 10px;border:1px solid #d9dee7;border-radius:8px" placeholder="What is going wrong?"></textarea></div>
-    <button class="btn" id="hgo">Send to Ryan</button>
+    <div class="fld"><textarea id="htxt" rows="4" style="font-size:13.5px;padding:8px 10px" placeholder="What is going wrong?"></textarea></div>
+    <button class="b1" id="hgo">Send to Ryan</button>
   </div>
 </div>
 <script>
@@ -1745,41 +1885,43 @@ function jaxauth_admin_html() {
 }
 </style>
 <div class="wrap">
-  <span class="brand">JAXAERO</span>
-  <h1>Access admin</h1>
-  <div class="sub">Pick a person, flip toggles, save. Changes apply on their next page load. Every save is logged below.</div>
-  <div style="display:flex;gap:10px;align-items:center;margin:-4px 0 14px"><a class="btn ghost" href="<?php echo esc_url($itUrl); ?>" target="_top" style="font-size:12.5px;text-decoration:none;display:inline-block">IT status</a><span class="small">How every tool, server and job behind the dashboard is doing.</span></div>
+  <div class="hd">
+    <?php if (empty($GLOBALS['jaxauth_canvas_render'])): ?><span class="brand">JAXAERO</span><?php endif; ?>
+    <h1>Access admin</h1>
+    <div class="sub">Pick a person, flip toggles, save. Changes apply on their next page load. Every save is logged below.</div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;margin:0 0 14px;flex-wrap:wrap"><a class="b2" href="<?php echo esc_url($itUrl); ?>" target="_top" style="font-size:12.5px;padding:7px 14px">IT status</a><span class="small">How every tool, server and job behind the dashboard is doing.</span></div>
   <div class="grid2">
     <div class="mod ulist">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <b>People</b><button class="btn ghost" id="addU" style="padding:4px 12px;font-size:12px">+ Add user</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
+        <span class="cardh" style="margin-bottom:0">People</span><button class="b2" id="addU" style="padding:5px 12px;font-size:12.5px">+ Add user</button></div>
       <div id="ulist"></div>
     </div>
     <div class="mod">
       <div class="err" id="aerr"></div><div class="okmsg" id="aok">Saved.</div>
-      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;border-bottom:1px solid #e6e9ef;padding-bottom:14px;margin-bottom:14px">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;border-bottom:1px solid var(--hair);padding-bottom:14px;margin-bottom:14px">
         <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Name</label><input id="dn" autocomplete="off"></div>
         <div class="fld" style="flex:1;min-width:170px;margin:0"><label>Email</label><input id="de" readonly></div>
         <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Pay page binding</label><select id="db"></select></div>
         <label class="small" style="display:flex;align-items:center;gap:6px;padding-bottom:4px"><input type="checkbox" id="dd"> Disabled</label>
         <label class="small" id="admwrap" style="display:flex;align-items:center;gap:8px;padding-bottom:4px" title="Dashboard admin can open Access admin, view as anyone and see every gated page. Only a WordPress administrator can change it."><button type="button" class="tg" id="adm" aria-label="toggle dashboard admin"></button> Dashboard admin</label>
-        <button class="btn ghost" id="resetPw" style="font-size:12.5px">Reset password</button>
-        <button class="btn ghost" id="viewAs" style="font-size:12.5px">View as user</button>
-        <button class="btn ghost" id="delU" style="font-size:12.5px;color:#C0161C;border-color:#e3b3b6">Delete user</button>
+        <button class="b2" id="resetPw" style="font-size:12.5px">Reset password</button>
+        <button class="b2" id="viewAs" style="font-size:12.5px">View as user</button>
+        <button class="b2 bdel" id="delU" style="font-size:12.5px">Delete user</button>
       </div>
       <div style="overflow-x:auto"><table id="mx">
         <tr><th>Widget</th><th></th><th style="width:48px">On</th></tr>
       </table></div>
       <div class="small" style="margin:10px 2px 0">&#9733; marks this person's home screen - the page they land on right after signing in. Turn a widget on, then click its star; click it again to return to the default (staff land on Revenue - AUTO, aircraft owners on My Aircraft). "View as user" opens a new tab showing the portal exactly as they see it; the banner at the bottom of that view ends the 15-minute preview.</div>
-      <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;border-top:1px solid #e6e9ef;margin-top:12px;padding-top:14px">
-        <button class="btn" id="save">Save access</button></div>
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;border-top:1px solid var(--hair);margin-top:12px;padding-top:14px">
+        <button class="b1" id="save">Save access</button></div>
     </div>
   </div>
   <div class="mod" id="fqamod">
     <b>FOQA safety deck</b>
     <div class="small" style="margin-bottom:8px">Drop Kasen's monthly .pptx to update the instructor safety panel. Parsed and shown to you before anything is saved. <span id="fqamonths"></span></div>
-    <div id="fqaZone" style="border:2px dashed #d9dee7;border-radius:9px;background:#fafbfd;padding:14px;text-align:center;cursor:pointer;font-size:13px">
-      <b>Drop the .pptx here</b> <span style="color:#6b7488">or click to choose</span>
+    <div id="fqaZone" style="border:2px dashed var(--hair2);border-radius:var(--r-md);background:var(--tint);padding:14px;text-align:center;cursor:pointer;font-size:13px">
+      <b>Drop the .pptx here</b> <span style="color:var(--ink2)">or click to choose</span>
       <input type="file" id="fqaFile" accept=".pptx" style="display:none">
     </div>
     <div id="fqaMsg" class="small" style="margin-top:8px;font-weight:700;min-height:16px"></div>
@@ -1789,21 +1931,21 @@ function jaxauth_admin_html() {
     <b>Anthropic API key &mdash; key only</b>
     <div class="small" style="margin-bottom:8px">This box takes ONLY the Anthropic API key that powers invoice reading. It is not a place to upload documents. Stored server-side and never shown again after saving. Status: <span id="aist"><?php echo esc_html($aiSet); ?></span></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <input type="password" id="aikey" placeholder="sk-ant-..." autocomplete="off" style="flex:1;min-width:220px;font:inherit;padding:8px 10px;border:1px solid #d9dee7;border-radius:8px">
-      <button class="btn" id="aisave" style="font-size:13px">Save key</button>
+      <input type="password" id="aikey" placeholder="sk-ant-..." autocomplete="off" style="flex:1;min-width:220px;font:inherit;padding:10px 12px;border:1px solid var(--hair2);border-radius:var(--r-sm);color:var(--ink);background:var(--panel)">
+      <button class="b1" id="aisave" style="font-size:13px">Save key</button>
     </div>
-    <div id="ainote" class="small" style="margin-top:8px;font-weight:700;color:#1E7C46;<?php echo $aiNote === '' ? 'display:none' : ''; ?>"><?php echo esc_html($aiNote); ?></div>
+    <div id="ainote" class="small" style="margin-top:8px;font-weight:700;color:var(--green);<?php echo $aiNote === '' ? 'display:none' : ''; ?>"><?php echo esc_html($aiNote); ?></div>
   </div>
-  <div id="pwov" style="display:none;position:fixed;inset:0;background:rgba(15,29,61,.5);z-index:99;align-items:flex-start;justify-content:center;padding:96px 16px 16px">
-    <div style="background:#fff;border-radius:12px;padding:20px;max-width:430px;width:100%;box-shadow:0 14px 44px rgba(15,23,42,.35)">
-      <b id="pwtitle">Temporary password</b>
+  <div id="pwov" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:99;align-items:flex-start;justify-content:center;padding:96px 16px 16px">
+    <div style="background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-lg);padding:22px;max-width:430px;width:100%;box-shadow:var(--lift)">
+      <b id="pwtitle" class="cardh">Temporary password</b>
       <div class="small" style="margin:6px 0 10px">Shown once. Hand it over out of band - the site never emails it. A new password is required at first sign-in.</div>
       <div style="display:flex;gap:8px">
-        <input id="pwval" readonly autocomplete="off" style="flex:1;font-family:Consolas,Menlo,monospace;font-size:15px;padding:9px 10px;border:1px solid #d9dee7;border-radius:8px">
-        <button class="btn" id="pwcopy" type="button">Copy</button>
+        <input id="pwval" readonly autocomplete="off" style="flex:1;font-family:Consolas,Menlo,monospace;font-size:15px;padding:10px 12px;border:1px solid var(--hair2);border-radius:var(--r-sm);color:var(--ink);background:var(--panel)">
+        <button class="b1" id="pwcopy" type="button">Copy</button>
       </div>
-      <div class="small" id="pwcopied" style="color:#1E7C46;font-weight:700;margin-top:6px;display:none">Copied to clipboard.</div>
-      <div style="text-align:right;margin-top:10px"><button class="btn ghost" id="pwclose" type="button">Close</button></div>
+      <div class="small" id="pwcopied" style="color:var(--green);font-weight:700;margin-top:6px;display:none">Copied to clipboard.</div>
+      <div style="text-align:right;margin-top:10px"><button class="b2" id="pwclose" type="button">Close</button></div>
     </div>
   </div>
   <div class="mod">
@@ -1843,11 +1985,11 @@ function jaxauth_admin_html() {
     if(!z){return;}
     var BASE=(location.origin||'')+'/wp-json/jaxfoqa/v1/';
     var parsed=null;
-    function say(t,c){ms.textContent=t||'';ms.style.color=c==='e'?'#C0161C':(c==='k'?'#1E7C46':'#44506a');}
+    function say(t,c){ms.textContent=t||'';ms.style.color=c==='e'?'var(--red)':(c==='k'?'var(--green)':'var(--ink2)');}
     function esc(s){return String(s).replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];});}
     z.addEventListener('click',function(){fi.click();});
-    ['dragenter','dragover'].forEach(function(e){z.addEventListener(e,function(ev){ev.preventDefault();ev.stopPropagation();z.style.borderColor='#B9822B';z.style.background='#fffaf0';});});
-    ['dragleave','drop'].forEach(function(e){z.addEventListener(e,function(ev){ev.preventDefault();ev.stopPropagation();z.style.borderColor='#d9dee7';z.style.background='#fafbfd';});});
+    ['dragenter','dragover'].forEach(function(e){z.addEventListener(e,function(ev){ev.preventDefault();ev.stopPropagation();z.style.borderColor='var(--ink)';z.style.background='var(--track)';});});
+    ['dragleave','drop'].forEach(function(e){z.addEventListener(e,function(ev){ev.preventDefault();ev.stopPropagation();z.style.borderColor='var(--hair2)';z.style.background='var(--tint)';});});
     z.addEventListener('drop',function(ev){if(ev.dataTransfer&&ev.dataTransfer.files.length){go(ev.dataTransfer.files[0]);}});
     fi.addEventListener('change',function(){if(fi.files.length){go(fi.files[0]);}});
     function go(file){
@@ -1867,8 +2009,8 @@ function jaxauth_admin_html() {
       if(fo.cre_tier_2000!=null){h+='<br>Traffic proximity: '+fo.cre_tier_2000+' / '+(fo.cre_tier_1000!=null?fo.cre_tier_1000:'-')+' / '+(fo.cre_tier_500!=null?fo.cre_tier_500:'-')+' (2000/1000/500 ft)';}
       if(fo.braking_avg!=null){h+='<br>Braking: '+fo.braking_avg+' G';}
       if(fo.go_around_pct!=null){h+='<br>Go-around: '+fo.go_around_pct+'%';}
-      if(mi.length){h+='<br><span style="color:#B9822B">Not found: '+esc(mi.join('; '))+'. Nothing saved yet.</span>';}
-      h+='<br><button type="button" class="btn" id="fqaSave" style="font-size:13px;margin-top:8px"'+(fo.month_key?'':' disabled')+'>Save '+esc(fo.label||'')+'</button>';
+      if(mi.length){h+='<br><span style="color:var(--amber)">Not found: '+esc(mi.join('; '))+'. Nothing saved yet.</span>';}
+      h+='<br><button type="button" class="b1" id="fqaSave" style="font-size:13px;margin-top:8px"'+(fo.month_key?'':' disabled')+'>Save '+esc(fo.label||'')+'</button>';
       ou.innerHTML=h;ou.style.display='';
       var b=document.getElementById('fqaSave');if(b){b.addEventListener('click',save);}
     }
@@ -1929,7 +2071,7 @@ function jaxauth_admin_html() {
       mx.appendChild(tr);
     });
     var achdr=document.createElement('tr');
-    achdr.innerHTML='<th colspan="3" style="text-align:left;padding-top:12px;border-top:1px solid #e6e9ef">Aircraft owner statements (view-only)</th>';
+    achdr.innerHTML='<th colspan="3" style="text-align:left;padding-top:12px;border-top:1px solid var(--hair)">Aircraft owner statements (view-only)</th>';
     mx.appendChild(achdr);
     var uac=u.ac||[];
     ACTAILS.forEach(function(tl){
@@ -1961,7 +2103,7 @@ function jaxauth_admin_html() {
     var box=document.getElementById('alog');box.innerHTML='';
     LOG.forEach(function(e){
       var r=document.createElement('div');r.className='arow';
-      r.innerHTML='<time>'+esc(e.t)+'</time><span><b>'+esc(e.who)+'</b> '+esc(e.txt)+(e.ip?' <span style="color:#8b93a3;font-size:11.5px">from '+esc(e.ip)+'</span>':'')+'</span>';
+      r.innerHTML='<time>'+esc(e.t)+'</time><span><b>'+esc(e.who)+'</b> '+esc(e.txt)+(e.ip?' <span style="color:var(--ink3);font-size:11.5px">from '+esc(e.ip)+'</span>':'')+'</span>';
       box.appendChild(r);
     });
     if(!LOG.length){box.innerHTML='<div class="small">Nothing logged yet.</div>';}
