@@ -725,6 +725,10 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
   $homeCanvasKeys = array_map(function ($x) { return $x['key']; }, jaxauth_canvas_widgets($user));
   if ($homeSel !== '' && !in_array($homeSel, $homeCanvasKeys, true) && (!in_array($homeSel, $grants, true) || !in_array($homeSel, $homePageKeys, true))) { $homeSel = ''; }
   $oldHome = (string) get_user_meta($uid, 'jaxauth_home', true);
+  /* the admin screen has no star for a canvas-tab home, so its empty 'home' is
+     not a clear - keep the stored tab. Send home=none to clear one on purpose. */
+  if ($homeSel === '' && $oldHome !== '' && (string) $req->get_param('home') !== 'none'
+      && in_array($oldHome, $homeCanvasKeys, true) && !in_array($oldHome, $homePageKeys, true)) { $homeSel = $oldHome; }
   if ($homeSel !== $oldHome) {
     if ($homeSel === '') { delete_user_meta($uid, 'jaxauth_home'); }
     else { update_user_meta($uid, 'jaxauth_home', $homeSel); }
