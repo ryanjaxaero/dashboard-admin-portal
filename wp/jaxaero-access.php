@@ -38,6 +38,7 @@
      lease      [jaxaero_leases]          lease management (VR Leasing) - canvas Accounting tab
      lessor     [jaxaero_lessor]          lessor portal - the VR Leasing login, read-only
      depr       [jaxaero_depreciation]    fixed-asset register - canvas Accounting tab
+     depr_view  [jaxaero_depreciation]    the same register, read only (alt key)
      Sub-widget keys (rev.mom etc.) are phase 2 - they need guards
      inside snippets 5-9 and are deliberately not claimed here.
 
@@ -50,6 +51,9 @@
      - Admin REST routes require a logged-in dashboard admin
        (capability jaxauth_admin, or manage_options as break-glass)
        plus a standard REST nonce.
+     - A dashboard admin can compose a WordPress administrator's canvas
+       (grants, aircraft, home) but cannot reset, disable, rename or
+       rebind that account - those take manage_options (SEC-1, Sep 4).
      - The site cannot send email (punch list K12), so there is no
        email reset flow. Admins set temporary passwords, shown once;
        the user is then required to choose a new one.
@@ -98,6 +102,10 @@ function jaxauth_registry() {
     'tax'       => ['Sales tax', 'aircraft sales tax page'],
     'lease'     => ['Leases', 'lease management - VR Leasing aircraft'],
     'depr'      => ['Depreciation', 'fixed assets - book and tax depreciation'],
+    /* Sep 4 2026 review (SEC-3): the read-only tier the depreciation snippet's
+       jaxdep_can_read already honours - an outside reader (Vargo) gets this,
+       never 'depr', so nobody is handed event-writing rights to read. */
+    'depr_view' => ['Depreciation (view only)', 'fixed assets - read the register, schedule and documents'],
     'docs'      => ['Documents', 'archive & search'],
     'expense'   => ['Add expenses', 'enter expenses on the owner P/L'],
     'ownerstmt' => ['Aircraft owner statements', 'staff view - every plane P/L'],
@@ -145,6 +153,18 @@ function jaxauth_shortcode_map() {
     /* Ryan, Sep 4 2026 (depreciation): the fixed-asset register, Accounting's
        fourth tab. An ordinary grant. */
     'jaxaero_depreciation'   => 'depr',
+  ];
+}
+
+/* Sep 4 2026 review (SEC-3): tags that open on more than one grant. The map
+   above names each tag's primary key (what the page map and the canvas use);
+   the gate below renders the tag when the viewer holds ANY key listed here.
+   The widgets' own read gates agree: jaxdep_can_read admits 'depr_view',
+   jaxlease_can_read admits 'lease' holders (staff mode) as well as 'lessor'. */
+function jaxauth_shortcode_alt_keys() {
+  return [
+    'jaxaero_depreciation' => ['depr', 'depr_view'],
+    'jaxaero_lessor'       => ['lessor', 'lease'],
   ];
 }
 
@@ -223,8 +243,12 @@ function jaxauth_openable($user = null) {
 function jaxauth_can($key, $uid = 0) {
   $uid = $uid ? $uid : get_current_user_id();
   if (!$uid) { return false; }
-  if (!jaxauth_enabled($uid)) { return false; }
   $user = get_user_by('id', $uid);
+  /* Sep 4 2026 review (SEC-1): a WordPress administrator passes every gate
+     BEFORE the enabled check, so a stray jaxauth_disabled meta - which a
+     dashboard admin could once write - can never lock Ryan out. */
+  if ($user && user_can($user, 'manage_options')) { return true; }
+  if (!jaxauth_enabled($uid)) { return false; }
   if (jaxauth_is_admin($user)) { return true; }
   return in_array($key, jaxauth_grants($uid), true);
 }
@@ -344,12 +368,10 @@ function jaxauth_default_dest($user = null) {
      which is why Ryan's home looked nothing like Ben's. Anyone whose toggles
      compose at least one widget lands on the canvas; an admin with no toggles
      still falls through to the legacy staff routing below. */
-  if (true) {
-    $sharedC = (int) get_option('jaxauth_canvas_page');
-    if ($sharedC && get_post_status($sharedC) === 'publish' && count(jaxauth_canvas_widgets($user)) > 0) {
-      $scl = get_permalink($sharedC);
-      if ($scl) { return $scl; }
-    }
+  $sharedC = (int) get_option('jaxauth_canvas_page');
+  if ($sharedC && get_post_status($sharedC) === 'publish' && count(jaxauth_canvas_widgets($user)) > 0) {
+    $scl = get_permalink($sharedC);
+    if ($scl) { return $scl; }
   }
   /* Ryan, Aug 25: a starred home screen wins while they can still open it */
   $pref = (string) get_user_meta($user->ID, 'jaxauth_home', true);
@@ -451,7 +473,11 @@ add_filter('pre_do_shortcode_tag', function ($ret, $tag, $attr) {
     }
     return $ret;
   }
-  if (!jaxauth_can($key, $u->ID)) { return jaxauth_denied_html(); }
+  $altKeys = jaxauth_shortcode_alt_keys();
+  $anyKey = isset($altKeys[$tag]) ? $altKeys[$tag] : array($key);
+  $holds = false;
+  foreach ($anyKey as $ak) { if (jaxauth_can($ak, $u->ID)) { $holds = true; break; } }
+  if (!$holds) { return jaxauth_denied_html(); }
   return $ret;
 }, 10, 3);
 
@@ -756,6 +782,22 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
   if ($uid === $me && $disabled === '1') {
     return new WP_Error('jaxauth_self', 'You cannot disable your own account.', ['status' => 400]);
   }
+  /* Sep 4 2026 review (SEC-1): a dashboard admin (Ben) may compose a WordPress
+     administrator's canvas - the widget toggles, the aircraft list that only
+     derives 'owner', and the home star - and nothing else. Disabling (which
+     also destroys every session), renaming and rebinding Ryan's account take
+     manage_options. Sits above every write so a refused save changes nothing. */
+  if (user_can($user, 'manage_options') && !current_user_can('manage_options')) {
+    if ($disabled === '1') {
+      return new WP_Error('jaxauth_wpadmin', 'Only a WordPress administrator can disable another administrator.', ['status' => 403]);
+    }
+    if ($newName !== '' && $newName !== $user->display_name) {
+      return new WP_Error('jaxauth_wpadmin', 'Only a WordPress administrator can rename another administrator.', ['status' => 403]);
+    }
+    if ($inst !== sanitize_title((string) get_user_meta($uid, 'jaxauth_instructor', true))) {
+      return new WP_Error('jaxauth_wpadmin', 'Only a WordPress administrator can change the pay page binding of another administrator.', ['status' => 403]);
+    }
+  }
   /* Ryan, Sep 3 2026: "add a toggle switch to turn on admin access for people".
      Dashboard admin = the jaxauth_admin capability (Access admin, view-as, every
      gated page). Only a real WordPress administrator may grant or revoke it; a
@@ -764,7 +806,10 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
      above every write so a rejected save changes nothing at all. */
   $admParam = $req->get_param('admin');
   $wantAdmin = ($admParam === true || $admParam === 'true' || $admParam === 1 || $admParam === '1');
-  $hasAdmin = user_can($user, JAXAUTH_CAP);
+  /* a WordPress administrator already IS an admin (jaxauth_is_admin), so the
+     UI's locked-on toggle for such a row is not a change and never trips the
+     guard below; asking to turn it OFF still lands on the refusals. */
+  $hasAdmin = user_can($user, JAXAUTH_CAP) || user_can($user, 'manage_options');
   $admChanged = false;
   if ($admParam !== null && $wantAdmin !== $hasAdmin) {
     if (!current_user_can('manage_options')) {
@@ -800,13 +845,16 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
   if ($ac) { $grants[] = 'owner'; }
   $old = jaxauth_grants($uid);
   update_user_meta($uid, 'jaxauth_grants', $grants);
+  /* Sep 4 2026 review (SEC-7): the binding is written BEFORE the home check
+     below, which reads it through jaxauth_canvas_widgets - so binding a person
+     and starring their pay tab in the same save keeps the star. */
+  update_user_meta($uid, 'jaxauth_instructor', $inst);
   /* starred home screen - only a granted widget that has a page qualifies */
   $homeSel = sanitize_text_field((string) $req->get_param('home'));
   $homePageKeys = array_values(array_diff(array_intersect(array_values((array) get_option('jaxauth_pages', [])), array_keys(jaxauth_registry())), ['access']));
   /* Ryan, Sep 4 2026: a canvas tab key (Sam's binding-driven 'logdetail') is
-     also a valid home - the canvas opens on that tab. Grants were just saved
-     above; the binding save follows, so a binding-driven key needs the binding
-     already stored (true for every existing user). */
+     also a valid home - the canvas opens on that tab. Grants and the binding
+     were both saved above, so a binding-driven key resolves on the same save. */
   $homeCanvasKeys = array_map(function ($x) { return $x['key']; }, jaxauth_canvas_widgets($user));
   if ($homeSel !== '' && !in_array($homeSel, $homeCanvasKeys, true) && (!in_array($homeSel, $grants, true) || !in_array($homeSel, $homePageKeys, true))) { $homeSel = ''; }
   $oldHome = (string) get_user_meta($uid, 'jaxauth_home', true);
@@ -821,7 +869,6 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
       ? 'cleared the home screen for "' . $user->display_name . '".'
       : 'set "' . $user->display_name . '" home screen to ' . $homeSel . '.');
   }
-  update_user_meta($uid, 'jaxauth_instructor', $inst);
   if ($disabled === '1') {
     update_user_meta($uid, 'jaxauth_disabled', '1');
     /* the meta alone only blocks future gate checks - an already-signed-in
@@ -1096,6 +1143,13 @@ function jaxauth_rest_reset_pw(WP_REST_Request $req) {
   if (!$user || !jaxauth_is_managed($user)) {
     return new WP_Error('jaxauth_nouser', 'No such managed user.', ['status' => 404]);
   }
+  /* Sep 4 2026 review (SEC-1): a WordPress administrator's password is reset
+     only by another WordPress administrator - a dashboard admin (jaxauth_admin)
+     must never be handed a temporary password for Ryan's account. Mirrors the
+     administrator refusal in delete-user. */
+  if (user_can($user, 'manage_options') && !current_user_can('manage_options')) {
+    return new WP_Error('jaxauth_wpadmin', 'Only a WordPress administrator can reset another administrator.', ['status' => 403]);
+  }
   $temp = wp_generate_password(14, false, false);
   wp_set_password($temp, $uid);
   update_user_meta($uid, 'jaxauth_must_change', '1');
@@ -1126,6 +1180,7 @@ function jaxauth_canvas_widgets($u) {
     array('tax', '[jaxaero_tax]', 'Sales Tax'),
     array('lease', '[jaxaero_leases]', 'Leases'),
     array('depr', '[jaxaero_depreciation]', 'Depreciation'),
+    array('depr_view', '[jaxaero_depreciation]', 'Depreciation'),
     array('docs', '[jaxaero_documents]', 'Documents'),
   );
   /* Ryan, Aug 31 PM: the canvas follows the ACTUAL Access Admin toggles for
@@ -1134,6 +1189,9 @@ function jaxauth_canvas_widgets($u) {
      toggle state. */
   $cvsG = jaxauth_grants($u->ID);
   foreach ($order as $w) {
+    /* Sep 4 2026 review (SEC-3): 'depr_view' is the same register read-only;
+       a person holding both keys gets ONE Depreciation tab, the writing one. */
+    if ($w[0] === 'depr_view' && in_array('depr', $cvsG, true)) { continue; }
     if (in_array($w[0], $cvsG, true)) { $out[] = array('key' => $w[0], 'tag' => $w[1], 'label' => $w[2]); }
     if ($w[0] === 'owner') {
       /* the person's own pay page sits after statements, before the tools */
@@ -1285,7 +1343,7 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* Ryan, Sep 4 2026 (lease): the Revenue bubble is now the Accounting
      department (Revenue / Sales tax / Leases / Depreciation as a sub-menu, see $subGroups
      below); the lessor's statements are their own bubble. */
-  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease statements');
+  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease statements');
   /* Ben, Sep 2 (punch list 13B): Log Detailing leads so Sam's canvas opens on
      it with My Pay as the next tab. Safety now precedes My Pay and My Hours
      follows it, so an instructor's tabs read Safety / My Pay / My Hours. Nobody
@@ -1370,7 +1428,7 @@ add_shortcode('jaxauth_user_canvas', function () {
        the rest are lazy placeholders the loader still fetches - it drains its
        whole queue, visible or not. A group with a single widget gets no strip. */
     $subGroups = array('Accounting');
-    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales tax', 'lease' => 'Leases', 'depr' => 'Depreciation');
+    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation');
     $gi = 0; $tabsH = ''; $bodyH = '';
     foreach ($groups as $gl => $gw) {
       $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">' . esc_html($gl) . '</button>';
@@ -1647,7 +1705,7 @@ function jaxauth_frame_head() {
     . '.b2:hover,.btn.ghost:hover{background:var(--tint);color:var(--ink)}'
     /* destructive: --red text on white, never a red fill (DESIGN-SYSTEM.md) */
     . '.bdel,.bdel:hover{color:var(--red)}'
-    . '.b1:disabled,.b2:disabled,.btn:disabled{opacity:.45;cursor:default}'
+    . '.b1:disabled,.b2:disabled,.btn:disabled,.tg:disabled{opacity:.45;cursor:default}'
     . '.err{display:none;background:var(--red-tint);border:1px solid var(--red-line);color:var(--red);border-radius:var(--r-md);padding:10px 12px;font-size:13.5px;margin-bottom:12px}'
     . '.err.on{display:block}'
     . '.okmsg{display:none;background:var(--green-tint);border:1px solid var(--green-line);color:var(--green);border-radius:var(--r-md);padding:10px 12px;font-size:13.5px;margin-bottom:12px}'
@@ -1864,7 +1922,11 @@ function jaxauth_admin_html() {
       'd' => !jaxauth_enabled($wu->ID),
       'ac' => array_values((array) get_user_meta($wu->ID, 'jaxown_aircraft', true)),
       'hm' => (string) get_user_meta($wu->ID, 'jaxauth_home', true),
-      'a' => user_can($wu, JAXAUTH_CAP),
+      /* Sep 4 2026 review (SEC-6): a WordPress administrator is an admin
+         regardless of the jaxauth_admin cap (jaxauth_is_admin says so), so his
+         row reads ADMIN; 'wp' locks the toggle - nothing here can change it. */
+      'a' => user_can($wu, JAXAUTH_CAP) || user_can($wu, 'manage_options'),
+      'wp' => user_can($wu, 'manage_options'),
     ];
   }
   $acd0 = get_option('jaxac_data_last', array());
@@ -2065,7 +2127,7 @@ function jaxauth_admin_html() {
     SLUGS.forEach(function(s){var o=document.createElement('option');o.value=s;o.textContent=s;db.appendChild(o);});
     db.value=u.b||'';
     document.getElementById('dd').checked=!!u.d;
-    var adm=document.getElementById('adm');adm.classList.toggle('on',!!u.a);adm.style.opacity=CANADM?'1':'.45';adm.title=CANADM?'':'Only a WordPress administrator (Ryan) can change this';
+    var adm=document.getElementById('adm');adm.classList.toggle('on',!!u.a);adm.disabled=!!u.wp;adm.style.opacity=(CANADM&&!u.wp)?'1':'.45';adm.title=u.wp?'WordPress administrator':(CANADM?'':'Only a WordPress administrator (Ryan) can change this');
     var mx=document.getElementById('mx');
     mx.innerHTML='<tr><th>Widget</th><th></th><th style="width:48px">On</th></tr>';
     Object.keys(REG).forEach(function(k){
@@ -2127,6 +2189,8 @@ function jaxauth_admin_html() {
     if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v.value).then(done);}
   });
   document.getElementById('adm').addEventListener('click',function(){
+    var cu=cur();
+    if(cu&&cu.wp){fail('That account is a WordPress administrator - always an admin.');return;}
     if(!CANADM){fail('Only a WordPress administrator (Ryan) can change admin access.');return;}
     this.classList.toggle('on');
   });
