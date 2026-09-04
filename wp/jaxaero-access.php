@@ -37,6 +37,7 @@
      access     the admin panel page
      lease      [jaxaero_leases]          lease management (VR Leasing) - canvas Accounting tab
      lessor     [jaxaero_lessor]          lessor portal - the VR Leasing login, read-only
+     depr       [jaxaero_depreciation]    fixed-asset register - canvas Accounting tab
      Sub-widget keys (rev.mom etc.) are phase 2 - they need guards
      inside snippets 5-9 and are deliberately not claimed here.
 
@@ -96,6 +97,7 @@ function jaxauth_registry() {
     'mxtime'    => ['MX Timeclock', 'mechanic clock in/out, pay and task mix'],
     'tax'       => ['Sales tax', 'aircraft sales tax page'],
     'lease'     => ['Leases', 'lease management - VR Leasing aircraft'],
+    'depr'      => ['Depreciation', 'fixed assets - book and tax depreciation'],
     'docs'      => ['Documents', 'archive & search'],
     'expense'   => ['Add expenses', 'enter expenses on the owner P/L'],
     'ownerstmt' => ['Aircraft owner statements', 'staff view - every plane P/L'],
@@ -140,6 +142,9 @@ function jaxauth_shortcode_map() {
        lessor's read-only statements. Both are ordinary grants. */
     'jaxaero_leases'         => 'lease',
     'jaxaero_lessor'         => 'lessor',
+    /* Ryan, Sep 4 2026 (depreciation): the fixed-asset register, Accounting's
+       fourth tab. An ordinary grant. */
+    'jaxaero_depreciation'   => 'depr',
   ];
 }
 
@@ -1120,6 +1125,7 @@ function jaxauth_canvas_widgets($u) {
     array('marketing', '[jaxaero_marketing]', 'Marketing'),
     array('tax', '[jaxaero_tax]', 'Sales Tax'),
     array('lease', '[jaxaero_leases]', 'Leases'),
+    array('depr', '[jaxaero_depreciation]', 'Depreciation'),
     array('docs', '[jaxaero_documents]', 'Documents'),
   );
   /* Ryan, Aug 31 PM: the canvas follows the ACTUAL Access Admin toggles for
@@ -1277,9 +1283,9 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* Ben, Sep-eve: multi-page Dashboard. Widgets group into Pay-Portal-style
      tabs; one-group users keep the plain canvas exactly as before. */
   /* Ryan, Sep 4 2026 (lease): the Revenue bubble is now the Accounting
-     department (Revenue / Sales tax / Leases as a sub-menu, see $subGroups
+     department (Revenue / Sales tax / Leases / Depreciation as a sub-menu, see $subGroups
      below); the lessor's statements are their own bubble. */
-  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease statements');
+  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease statements');
   /* Ben, Sep 2 (punch list 13B): Log Detailing leads so Sam's canvas opens on
      it with My Pay as the next tab. Safety now precedes My Pay and My Hours
      follows it, so an instructor's tabs read Safety / My Pay / My Hours. Nobody
@@ -1364,7 +1370,7 @@ add_shortcode('jaxauth_user_canvas', function () {
        the rest are lazy placeholders the loader still fetches - it drains its
        whole queue, visible or not. A group with a single widget gets no strip. */
     $subGroups = array('Accounting');
-    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales tax', 'lease' => 'Leases');
+    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales tax', 'lease' => 'Leases', 'depr' => 'Depreciation');
     $gi = 0; $tabsH = ''; $bodyH = '';
     foreach ($groups as $gl => $gw) {
       $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">' . esc_html($gl) . '</button>';
