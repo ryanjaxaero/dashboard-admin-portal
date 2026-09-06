@@ -1121,6 +1121,13 @@ function jaxauth_viewas_banner() {
 .jaxva b{color:var(--amber) !important;font-weight:800 !important}
 .jaxva .jaxva-x{color:var(--amber) !important;background:var(--panel) !important;border:1px solid var(--amber-line) !important;border-radius:var(--r-sm) !important;padding:9px 16px !important;font-weight:700 !important;font-size:13.5px !important;text-decoration:none !important;letter-spacing:0 !important;text-transform:none !important}
 .jaxva .jaxva-x:hover{background:var(--tint) !important;color:var(--amber) !important}
+/* Ryan, Sep 6 2026 graphics and mobile review: reserve the space this fixed
+   bar occupies so it never overlaps page content underneath it. 130px covers
+   the worst case (sentence wraps to 3 lines plus the button on phone widths);
+   56px covers the normal single-line height at 560px and up. Scoped to the
+   same conditional print as .jaxva, so it disappears with the banner. */
+body{padding-bottom:130px !important}
+@media(min-width:560px){body{padding-bottom:56px !important}}
 </style>
 <div class="jaxva">
   <span>Preview: you are seeing the portal exactly as <b><?php echo esc_html($name); ?></b> sees it. Buttons that save or send will not work in this preview.</span>
@@ -1432,6 +1439,12 @@ add_shortcode('jaxauth_user_canvas', function () {
            . '.jaxmx .jaxmx-t{font-size:26px !important;font-weight:800 !important;letter-spacing:-.01em !important;color:var(--ink) !important;margin:0 !important;line-height:1.25 !important}'
            . '.jaxmx .jaxmx-sub{color:var(--ink2) !important;font-size:13.5px !important;line-height:1.5 !important;margin-top:6px !important}'
            . '.jaxmx .jaxmx-mod{background:var(--panel) !important;border:1px solid var(--hair) !important;border-radius:var(--r-lg) !important;padding:22px !important;box-shadow:var(--shadow) !important;color:var(--ink2) !important;font-size:13.5px !important;line-height:1.5 !important}'
+           /* Ryan, Sep 6 2026 graphics and mobile review: DESIGN-SYSTEM.md,
+              "Phone, scroll and focus" - tab buttons get the 44px touch target
+              too. !important to match every other rule in this block (renders
+              outside any iframe, so the Elementor kit can repaint it). Desktop
+              sizes are untouched above 560px. */
+           . '@media(max-width:560px){.jaxdash-tab,.jaxsub .ptab{min-height:44px !important}}'
            . '</style>';
     /* Ryan, Sep 2 (Tier 1): inline the SAVED tab's first widget, not always
        group 0's - act() mirrors the shown tab into a cookie so a returning
@@ -1693,12 +1706,24 @@ function jaxauth_iframe($html, $fid, $title) {
      its content container, clipping the frame's left edge. Below 700px the
      wrapper full-bleeds to the real viewport (100vw self-centered), immune to
      whatever margins the theme applies. Desktop keeps the contained layout. */
-  return '<style>@media(max-width:700px){#' . esc_attr($fid) . '_w{width:100vw !important;position:relative;left:50%;margin-left:-50vw !important}}</style>'
+  /* Ryan, Sep 6 2026 graphics and mobile review: 100vw includes a reserved
+     desktop scrollbar gutter (Chrome/Edge/Firefox on Windows), so narrowing
+     such a browser below 700px could push this wrapper past the true edge and
+     put a horizontal scrollbar on the whole outer page. --jax-vw, set from
+     clientWidth by the script below, excludes the gutter; 100vw is only the
+     fallback for the instant before that script runs. */
+  return '<style>@media(max-width:700px){#' . esc_attr($fid) . '_w{width:var(--jax-vw,100vw) !important;position:relative;left:50%;margin-left:calc(var(--jax-vw, 100vw) / -2) !important}}</style>'
     . '<div id="' . esc_attr($fid) . '_w" style="display:block;width:100%;margin:0;padding:0;line-height:0">'
     . '<iframe id="' . esc_attr($fid) . '" srcdoc="' . esc_attr($html) . '" '
     . 'style="display:block;width:100%;height:1100px;border:0;margin:0;overflow:auto" '
     . 'title="' . esc_attr($title) . '"></iframe></div>'
-    . '<script>(function(){var f=document.getElementById("' . esc_js($fid) . '");var last=0;window.addEventListener("message",function(e){var d=e.data;if(d&&d.jaxauthH&&Math.abs(d.jaxauthH-last)>2){last=d.jaxauthH;var fl=0;try{fl=window.innerHeight-f.getBoundingClientRect().top-(window.pageYOffset||0)*0;fl=window.innerHeight-f.getBoundingClientRect().top;}catch(e2){}f.style.height=Math.max(d.jaxauthH+24,fl)+"px";}});})();</script>';
+    . '<script>(function(){var f=document.getElementById("' . esc_js($fid) . '");var last=0;'
+    /* Ryan, Sep 6 2026 graphics and mobile review: true visible width for the
+       CSS custom property the style block above reads, not the
+       scrollbar-inclusive vw unit. */
+    . 'function setJaxVw(){try{document.documentElement.style.setProperty("--jax-vw",document.documentElement.clientWidth+"px");}catch(e3){}}'
+    . 'setJaxVw();window.addEventListener("resize",setJaxVw);'
+    . 'window.addEventListener("message",function(e){var d=e.data;if(d&&d.jaxauthH&&Math.abs(d.jaxauthH-last)>2){last=d.jaxauthH;var fl=0;try{fl=window.innerHeight-f.getBoundingClientRect().top-(window.pageYOffset||0)*0;fl=window.innerHeight-f.getBoundingClientRect().top;}catch(e2){}f.style.height=Math.max(d.jaxauthH+24,fl)+"px";}});})();</script>';
 }
 
 function jaxauth_frame_head() {
@@ -1749,6 +1774,10 @@ function jaxauth_frame_head() {
     /* destructive: --red text on white, never a red fill (DESIGN-SYSTEM.md) */
     . '.bdel,.bdel:hover{color:var(--red)}'
     . '.b1:disabled,.b2:disabled,.btn:disabled,.tg:disabled{opacity:.45;cursor:default}'
+    /* Ryan, Sep 6 2026 graphics and mobile review: one focus ring, everywhere
+       in this document (DESIGN-SYSTEM.md, "Phone, scroll and focus"). No
+       outline:none exists in this file. */
+    . ':focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:var(--r-sm)}'
     . '.err{display:none;background:var(--red-tint);border:1px solid var(--red-line);color:var(--red);border-radius:var(--r-md);padding:10px 12px;font-size:13.5px;margin-bottom:12px}'
     . '.err.on{display:block}'
     . '.okmsg{display:none;background:var(--green-tint);border:1px solid var(--green-line);color:var(--green);border-radius:var(--r-md);padding:10px 12px;font-size:13.5px;margin-bottom:12px}'
@@ -1769,6 +1798,11 @@ function jaxauth_frame_head() {
     . '.urow.on .chip{background:var(--panel);color:var(--ink)}'
     . '.grid2{display:grid;grid-template-columns:270px 1fr;gap:14px;align-items:start}'
     . '@media(max-width:820px){.grid2{grid-template-columns:1fr}}'
+    /* Ryan, Sep 6 2026 graphics and mobile review: DESIGN-SYSTEM.md, "Phone,
+       scroll and focus" - touch targets are 44px. .b1/.b2/.btn at padding:9px
+       16px with 13.5px type land at 38px; .fld input/select/textarea land
+       around the same. Desktop sizes are untouched above 560px. */
+    . '@media(max-width:560px){.b1,.b2,.btn,.fld input,.fld select,.fld textarea{min-height:44px}}'
     . '.tg{position:relative;width:42px;height:24px;border-radius:var(--r-pill);border:0;cursor:pointer;background:var(--ink3)}'
     /* Ryan, Sep 6 2026 design audit: the knob shadow is the token; an enabled toggle
        is chrome, so it is navy like every other selected state here, not --green */
@@ -1995,7 +2029,12 @@ function jaxauth_admin_html() {
 <?php echo jaxauth_frame_head(); ?>
 <style>
 .arow>span{min-width:0;overflow-wrap:anywhere}
-@media(max-width:700px){
+/* Ryan, Sep 6 2026 graphics and mobile review: 820px matches .grid2's own
+   stack breakpoint (frame head, jaxauth_frame_head) so the touch-enlarged
+   toggles/star/buttons below turn on at the same width where this screen
+   already drops to one column - was 700px, missing 701-820px (iPad Mini,
+   iPad, iPad Air/Pro portrait). */
+@media(max-width:820px){
 .tg{width:58px;height:40px;border:8px solid transparent;background-clip:padding-box}
 .hstar{font-size:22px;padding:9px 12px;margin-left:2px}
 #addU{padding:12px 14px !important}
@@ -2164,7 +2203,9 @@ function jaxauth_admin_html() {
     var box=document.getElementById('ulist');box.innerHTML='';
     USERS.forEach(function(u){
       var b=document.createElement('button');b.className='urow'+(u.id===sel?' on':'');
-      b.innerHTML='<span><b>'+esc(u.n)+'</b><span class="em">'+esc(u.e)+(u.d?' - disabled':'')+'</span></span>'
+      /* Ryan, Sep 6 2026 graphics and mobile review: title shows the full
+         address when the row's own text is ellipsis-truncated (.urow .em). */
+      b.innerHTML='<span><b>'+esc(u.n)+'</b><span class="em" title="'+esc(u.e)+'">'+esc(u.e)+(u.d?' - disabled':'')+'</span></span>'
         +'<span class="chip">'+(u.d?'OFF':(u.a?'ADMIN':(u.b?(u.ct?'1099':'CFI'):'USER')))+'</span>';
       b.addEventListener('click',function(){sel=u.id;renderAll();});
       box.appendChild(b);
