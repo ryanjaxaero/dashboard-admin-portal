@@ -1114,10 +1114,13 @@ function jaxauth_viewas_banner() {
   ?>
 <style>
 <?php echo jaxauth_tokens_css(); ?>
-.jaxva{position:fixed;left:0;right:0;bottom:0;z-index:2147483000;background:var(--amber) !important;color:#fff !important;font-family:<?php echo jaxauth_font_stack(); ?> !important;font-size:13.5px !important;line-height:1.5 !important;padding:10px 16px !important;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;box-shadow:0 -4px 16px rgba(0,0,0,.25)}
-.jaxva b{color:#fff !important;font-weight:800 !important}
-.jaxva .jaxva-x{color:#fff !important;background:rgba(255,255,255,.18) !important;border:1px solid rgba(255,255,255,.5) !important;border-radius:var(--r-sm) !important;padding:5px 14px !important;font-weight:700 !important;font-size:13px !important;text-decoration:none !important;letter-spacing:0 !important;text-transform:none !important}
-.jaxva .jaxva-x:hover{background:rgba(255,255,255,.3) !important;color:#fff !important}
+/* Ryan, Sep 6 2026 design audit: the house amber alert surface (--amber-tint fill,
+   --amber-line border, --amber text) instead of a solid amber fill with white text
+   and literal rgba() shadows; Exit preview is a .b2-sized outline button. */
+.jaxva{position:fixed;left:0;right:0;bottom:0;z-index:2147483000;background:var(--amber-tint) !important;color:var(--amber) !important;border-top:1px solid var(--amber-line);font-family:<?php echo jaxauth_font_stack(); ?> !important;font-size:13.5px !important;line-height:1.5 !important;padding:10px 16px !important;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+.jaxva b{color:var(--amber) !important;font-weight:800 !important}
+.jaxva .jaxva-x{color:var(--amber) !important;background:var(--panel) !important;border:1px solid var(--amber-line) !important;border-radius:var(--r-sm) !important;padding:9px 16px !important;font-weight:700 !important;font-size:13.5px !important;text-decoration:none !important;letter-spacing:0 !important;text-transform:none !important}
+.jaxva .jaxva-x:hover{background:var(--tint) !important;color:var(--amber) !important}
 </style>
 <div class="jaxva">
   <span>Preview: you are seeing the portal exactly as <b><?php echo esc_html($name); ?></b> sees it. Buttons that save or send will not work in this preview.</span>
@@ -1180,12 +1183,14 @@ function jaxauth_canvas_widgets($u) {
        hamburger-menu text and the canvas tab text. The department bubble the
        widget sits in stays 'MX' ($gmap / $gorder below), like Accounting. */
     array('mxtime', '[jaxaero_mx_time]', 'My Hours'),
-    array('ownerstmt', '[jaxaero_aircraft_owner]', 'Aircraft Owner Statements'),
+    /* Ryan, Sep 6 2026 design audit: sentence case, matching the registry label */
+    array('ownerstmt', '[jaxaero_aircraft_owner]', 'Aircraft owner statements'),
     array('owner', '[jaxaero_owner_portal]', 'My Aircraft'),
     array('lessor', '[jaxaero_lessor]', 'Lease statements'),
     array('sales', '[jaxaero_sales_pipeline]', 'Sales'),
     array('marketing', '[jaxaero_marketing]', 'Marketing'),
-    array('tax', '[jaxaero_tax]', 'Sales Tax'),
+    /* Ryan, Sep 6 2026 design audit: sentence case, matching the Accounting sub-label */
+    array('tax', '[jaxaero_tax]', 'Sales tax'),
     array('lease', '[jaxaero_leases]', 'Leases'),
     array('depr', '[jaxaero_depreciation]', 'Depreciation'),
     array('depr_view', '[jaxaero_depreciation]', 'Depreciation'),
@@ -1301,7 +1306,8 @@ add_shortcode('jaxauth_user_canvas', function () {
      Elementor page, so the kit-repaintable declarations are pinned. */
   if (!$tags) {
     return '<style>' . jaxauth_tokens_css()
-      . '.jaxcv-empty{max-width:1080px;margin:20px auto 24px;padding:0 16px;font-family:' . jaxauth_font_stack() . ' !important;color:var(--ink) !important}'
+      /* Ryan, Sep 6 2026 design audit: the widgets' .wrap box (1080 border-box, 20px inset) */
+      . '.jaxcv-empty{max-width:1080px;margin:20px auto 24px;padding:0 20px;box-sizing:border-box;font-family:' . jaxauth_font_stack() . ' !important;color:var(--ink) !important}'
       . '.jaxcv-empty .jaxcv-hd{border-bottom:3px solid var(--gold) !important;padding-bottom:9px;margin-bottom:14px}'
       . '.jaxcv-empty .jaxcv-brand{font-weight:800 !important;letter-spacing:.14em !important;font-size:13px !important;color:var(--brand) !important;line-height:1.2 !important}'
       . '.jaxcv-empty .jaxcv-t{margin:6px 0 4px !important;font-size:26px !important;font-weight:800 !important;letter-spacing:-.01em !important;color:var(--ink) !important;line-height:1.25 !important}'
@@ -1330,7 +1336,8 @@ add_shortcode('jaxauth_user_canvas', function () {
      as a mistake. This block lands on an Elementor page, so it is pinned. */
   $html = '<style>' . jaxauth_tokens_css()
         . 'div[id^="jaxw-"]{scroll-margin-top:72px}'
-        . '.jaxcv-greet{max-width:1080px;margin:20px auto 4px;padding:0 16px;font-family:' . jaxauth_font_stack() . ' !important}'
+        /* Ryan, Sep 6 2026 design audit: the widgets' .wrap box (1080 border-box, 20px inset) */
+        . '.jaxcv-greet{max-width:1080px;margin:20px auto 4px;padding:0 20px;box-sizing:border-box;font-family:' . jaxauth_font_stack() . ' !important}'
         . '.jaxcv-greet .jaxcv-brand{color:var(--brand) !important;font-weight:800 !important;font-size:13px !important;letter-spacing:.14em !important;line-height:1.2 !important;text-transform:uppercase !important}'
         . '.jaxcv-greet h1{font-size:26px !important;font-weight:800 !important;color:var(--ink) !important;letter-spacing:-.01em !important;margin:4px 0 0 !important;line-height:1.25 !important}'
         . '.jaxcv-ph{font-family:' . jaxauth_font_stack() . ' !important;color:var(--ink3) !important;font-size:13px !important;padding:40px 0;line-height:1.5}'
@@ -1379,7 +1386,9 @@ add_shortcode('jaxauth_user_canvas', function () {
   $isDash = count($groups) > 1;
   $lazyKeys = array();
   $phFn = function ($t) {
-    return '<div id="jaxw-' . esc_attr($t['key']) . '" class="jaxw-lazy" data-jaxw="' . esc_attr($t['key']) . '" style="min-height:340px;display:flex;align-items:center;justify-content:center">'
+    /* Ryan, Sep 6 2026 design audit: data-jaxl carries the widget label so a
+       load error can still say which widget it belongs to (markErr below). */
+    return '<div id="jaxw-' . esc_attr($t['key']) . '" class="jaxw-lazy" data-jaxw="' . esc_attr($t['key']) . '" data-jaxl="' . esc_attr($t['label']) . '" style="min-height:340px;display:flex;align-items:center;justify-content:center">'
          . '<div class="jaxcv-ph">Loading ' . esc_html($t['label']) . '&hellip;</div>'
          . '</div>';
   };
@@ -1396,7 +1405,9 @@ add_shortcode('jaxauth_user_canvas', function () {
     /* The token block is declared once per document, in the greeting <style>
        above, which is always printed before this one - so these rules just
        reference the variables. */
-    $html .= '<style>.jaxdash-tabs{display:flex;gap:8px;flex-wrap:wrap;max-width:1080px;margin:14px auto 4px;padding:0 16px;font-family:' . jaxauth_font_stack() . '}'
+    /* Ryan, Sep 6 2026 design audit: bubble row, sub-tab strip, gold rule and MX
+       empty state all share the widgets' .wrap box (1080 border-box, 20px inset). */
+    $html .= '<style>.jaxdash-tabs{display:flex;gap:8px;flex-wrap:wrap;max-width:1080px;margin:14px auto 4px;padding:0 20px;box-sizing:border-box;font-family:' . jaxauth_font_stack() . '}'
            . '.jaxdash-tab{font:700 13.5px ' . jaxauth_font_stack() . ' !important;padding:9px 18px !important;border:1px solid var(--hair2) !important;background:var(--panel) !important;border-radius:var(--r-pill) !important;cursor:pointer;color:var(--ink) !important;letter-spacing:0 !important;text-transform:none !important;box-shadow:none !important;min-width:0 !important;width:auto !important;line-height:1.2 !important}'
            . '.jaxdash-tab:hover{background:var(--tint) !important}'
            . '.jaxdash-tab.on{background:var(--ink) !important;color:#fff !important;border-color:var(--ink) !important}'
@@ -1405,16 +1416,18 @@ add_shortcode('jaxauth_user_canvas', function () {
               Pay Portal .ptabs/.ptab treatment (grey --ink2, navy --ink on,
               --brand underline). It renders OUTSIDE any iframe, so every
               declaration Elementor's kit could repaint is pinned. */
-           . '.jaxsub{display:flex !important;flex-wrap:wrap;gap:2px;max-width:1080px;margin:8px auto 0 !important;padding:0 16px !important;border-bottom:1px solid var(--hair);box-sizing:border-box;font-family:' . jaxauth_font_stack() . '}'
+           /* Ryan, Sep 6 2026 design audit: 18px under the gold rule, the .hd/.ptabs
+              rhythm of the Pay Portal header; 20px inset like the widgets. */
+           . '.jaxsub{display:flex !important;flex-wrap:wrap;gap:2px;max-width:1080px;margin:18px auto 0 !important;padding:0 20px !important;border-bottom:1px solid var(--hair);box-sizing:border-box;font-family:' . jaxauth_font_stack() . '}'
            . '.jaxsub .ptab{font:700 13.5px ' . jaxauth_font_stack() . ' !important;padding:9px 16px !important;border:0 !important;border-bottom:3px solid transparent !important;margin:0 0 -1px !important;background:none !important;border-radius:0 !important;box-shadow:none !important;color:var(--ink2) !important;cursor:pointer;white-space:nowrap;letter-spacing:0 !important;text-transform:none !important;min-width:0 !important;width:auto !important;line-height:1.2 !important}'
            . '.jaxsub .ptab:hover{color:var(--ink) !important}'
            . '.jaxsub .ptab.on{color:var(--ink) !important;border-bottom-color:var(--brand) !important}'
-           . '.jaxsub-rule{max-width:1080px;margin:14px auto 0 !important;padding:0 16px;box-sizing:border-box}'
+           . '.jaxsub-rule{max-width:1080px;margin:14px auto 0 !important;padding:0 20px;box-sizing:border-box}'
            . '.jaxsub-rule i{display:block;height:3px;background:var(--gold)}'
            . '.jaxsub-p{display:none}.jaxsub-p.on{display:block}'
            /* the MX "coming soon" bubble is an empty state, so it gets the house
               header (title, grey sub, gold rule) and one .mod sentence */
-           . '.jaxmx{max-width:1080px;margin:22px auto 30px;padding:0 16px;font-family:' . jaxauth_font_stack() . ' !important;color:var(--ink) !important}'
+           . '.jaxmx{max-width:1080px;margin:22px auto 30px;padding:0 20px;box-sizing:border-box;font-family:' . jaxauth_font_stack() . ' !important;color:var(--ink) !important}'
            . '.jaxmx .jaxmx-hd{border-bottom:3px solid var(--gold) !important;padding-bottom:9px;margin-bottom:14px}'
            . '.jaxmx .jaxmx-t{font-size:26px !important;font-weight:800 !important;letter-spacing:-.01em !important;color:var(--ink) !important;margin:0 !important;line-height:1.25 !important}'
            . '.jaxmx .jaxmx-sub{color:var(--ink2) !important;font-size:13.5px !important;line-height:1.5 !important;margin-top:6px !important}'
@@ -1491,8 +1504,9 @@ add_shortcode('jaxauth_user_canvas', function () {
         . '<div class="jaxmx"><div class="jaxmx-hd"><div class="jaxmx-t">MX portal coming soon!</div>'
         . '<div class="jaxmx-sub">Maintenance department tools will live here.</div></div>'
         /* Ben, Sep 6 2026: "Rebrand 'Timeclock' to 'My Hours'" - the admin-only
-           empty state names the feature the way the mechanics will see it. */
-        . '<div class="jaxmx-mod">Nothing to show yet. The mechanic My Hours timeclock, task mix and MX pay views land in this tab when they are built.</div></div></div>';
+           empty state names the feature the way the mechanics will see it.
+           Ryan, Sep 6 2026 design audit: the old word is gone from the copy too. */
+        . '<div class="jaxmx-mod">Nothing to show yet. The mechanic My Hours, task mix and MX pay views land in this tab when they are built.</div></div></div>';
     }
     $html .= '<div class="jaxdash-tabs" id="jaxdashTabs">' . $tabsH . '</div>' . $bodyH;
     $html .= '<script>(function(){var tabs=document.querySelectorAll(".jaxdash-tab");var gs=document.querySelectorAll(".jaxdash-g");'
@@ -1533,15 +1547,18 @@ add_shortcode('jaxauth_user_canvas', function () {
       . 'function hiddenKey(key){var ph=phOf(key);if(!ph||!ph.closest){return false;}var g=ph.closest(".jaxdash-g");var sp=ph.closest(".jaxsub-p");return !!((g&&!g.classList.contains("on"))||(sp&&!sp.classList.contains("on")));}'
       . 'var singles=[],batch=[];KEYS.forEach(function(k){(hiddenKey(k)?batch:singles).push(k);});'
       . 'var queue=singles.map(function(k){return [k];});if(batch.length){queue.push(batch.slice());}'
-      . 'function markErr(key,msg){var ph=phOf(key);if(ph&&ph.firstElementChild){ph.firstElementChild.textContent=msg;}}'
+      /* Ryan, Sep 6 2026 design audit: the error names its widget (data-jaxl) and
+         reads in --ink2 - "every error says which widget it belongs to". The
+         placeholder rule pins --ink3 with !important, so the color is set the same way. */
+      . 'function markErr(key,msg){var ph=phOf(key);if(ph&&ph.firstElementChild){ph.firstElementChild.textContent=(ph.getAttribute("data-jaxl")||"This section")+" "+msg;ph.firstElementChild.style.setProperty("color","var(--ink2)","important");}}'
       . 'function insertOne(pay,key){var ph=phOf(key);if(!ph){return true;}var w=pay.querySelector("[id=\"jaxw-"+key+"\"]");if(!w){return false;}var node=document.importNode(w,true);ph.parentNode.replaceChild(node,ph);runScripts(node);return true;}'
       . 'function load(keys,done){'
       . 'fetch(window.location.pathname+"?jaxw="+encodeURIComponent(keys.join(",")),{credentials:"same-origin"}).then(function(r){return r.text();}).then(function(t){'
       . 'var doc=new DOMParser().parseFromString(t,"text/html");var pay=doc.getElementById("jaxwLazyPayload");'
       . 'var missing=[];keys.forEach(function(k){if(!(pay&&insertOne(pay,k))){missing.push(k);}});'
-      . 'missing.forEach(function(k){if(keys.length>1&&!failed[k]){failed[k]=1;queue.unshift([k]);}else{markErr(k,"This section could not load - pull to refresh or reload the page.");}});'
+      . 'missing.forEach(function(k){if(keys.length>1&&!failed[k]){failed[k]=1;queue.unshift([k]);}else{markErr(k,"could not load - pull to refresh or reload the page.");}});'
       . 'done();'
-      . '}).catch(function(){keys.forEach(function(k){if(keys.length>1&&!failed[k]){failed[k]=1;queue.unshift([k]);}else{markErr(k,"This section could not load - check the connection and reload.");}});done();});}'
+      . '}).catch(function(){keys.forEach(function(k){if(keys.length>1&&!failed[k]){failed[k]=1;queue.unshift([k]);}else{markErr(k,"could not load - check the connection and reload.");}});done();});}'
       . 'function next(){while(inflight<MAX&&queue.length){var ks=queue.shift();inflight++;load(ks,function(){inflight--;next();});}}'
       . 'function promote(key){for(var i=0;i<queue.length;i++){var ix=queue[i].indexOf(key);if(ix>-1){if(queue[i].length===1){if(i>0){var it=queue.splice(i,1)[0];queue.unshift(it);}return;}queue[i].splice(ix,1);if(!queue[i].length){queue.splice(i,1);}queue.unshift([key]);return;}}}'
       . 'if("IntersectionObserver" in window){var io=new IntersectionObserver(function(es){var any=false;es.forEach(function(e){if(e.isIntersecting){promote(e.target.getAttribute("data-jaxw"));io.unobserve(e.target);any=true;}});if(any){next();}},{rootMargin:"600px 0px"});'
@@ -1595,7 +1612,8 @@ function jaxauth_menu_footer() {
   ?>
 <style>
 <?php echo jaxauth_tokens_css(); ?>
-.jaxmnu-btn{position:fixed;top:12px;right:12px;z-index:99990;width:42px !important;height:42px !important;min-width:0 !important;border-radius:var(--r-md) !important;border:1px solid var(--hair2) !important;background:var(--panel) !important;box-shadow:0 2px 10px rgba(20,35,70,.18) !important;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 !important;line-height:1 !important}
+/* Ryan, Sep 6 2026 design audit: control radius --r-sm and the one overlay shadow token, no literal */
+.jaxmnu-btn{position:fixed;top:12px;right:12px;z-index:99990;width:42px !important;height:42px !important;min-width:0 !important;border-radius:var(--r-sm) !important;border:1px solid var(--hair2) !important;background:var(--panel) !important;box-shadow:var(--lift) !important;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 !important;line-height:1 !important}
 .jaxmnu-btn span{display:block;width:18px;height:2px;background:var(--ink);position:relative}
 .jaxmnu-btn span:before,.jaxmnu-btn span:after{content:'';position:absolute;left:0;width:18px;height:2px;background:var(--ink)}
 .jaxmnu-btn span:before{top:-6px}.jaxmnu-btn span:after{top:6px}
@@ -1609,7 +1627,8 @@ body.admin-bar .jaxmnu-btn{top:44px}body.admin-bar .jaxmnu-pane{top:92px}
 .jaxmnu-help{display:none;padding:10px 16px 14px}
 .jaxmnu-help.on{display:block}
 .jaxmnu-help textarea{width:100% !important;min-height:76px;font:inherit !important;font-size:13.5px !important;padding:8px 10px !important;border:1px solid var(--hair2) !important;border-radius:var(--r-sm) !important;background:var(--panel) !important;color:var(--ink) !important;box-sizing:border-box !important}
-.jaxmnu-help .jaxmnu-send{margin-top:8px;background:var(--ink) !important;color:#fff !important;border:1px solid var(--ink) !important;border-radius:var(--r-sm) !important;box-shadow:none !important;width:auto !important;min-width:0 !important;padding:9px 16px !important;font:inherit !important;font-size:13px !important;font-weight:700 !important;letter-spacing:0 !important;text-transform:none !important;cursor:pointer}
+/* Ryan, Sep 6 2026 design audit: 13.5px, the button spec */
+.jaxmnu-help .jaxmnu-send{margin-top:8px;background:var(--ink) !important;color:#fff !important;border:1px solid var(--ink) !important;border-radius:var(--r-sm) !important;box-shadow:none !important;width:auto !important;min-width:0 !important;padding:9px 16px !important;font:inherit !important;font-size:13.5px !important;font-weight:700 !important;letter-spacing:0 !important;text-transform:none !important;cursor:pointer}
 .jaxmnu-help .jaxmnu-send:hover{background:var(--ink-d) !important;border-color:var(--ink-d) !important;color:#fff !important}
 .jaxmnu-note{font-size:12.5px;padding:0 16px 10px;color:var(--ink2)}
 </style>
@@ -1626,9 +1645,11 @@ body.admin-bar .jaxmnu-btn{top:44px}body.admin-bar .jaxmnu-pane{top:92px}
     <button type="button" class="jaxmnu-send" id="jaxmnuHelpSend">Send to Ryan</button>
   </div>
   <div class="jaxmnu-note" id="jaxmnuNote" style="display:none"></div>
-  <?php if ($adminUrl !== '') { ?><div class="jaxmnu-sep"></div><a href="<?php echo esc_url($adminUrl); ?>">Admin Portal</a><?php } ?>
+  <?php /* Ryan, Sep 6 2026 design audit: the menu item carries the name of the page it opens */ ?>
+  <?php if ($adminUrl !== '') { ?><div class="jaxmnu-sep"></div><a href="<?php echo esc_url($adminUrl); ?>">Access admin</a><?php } ?>
   <div class="jaxmnu-sep"></div>
-  <button type="button" class="jaxmnu-item" id="jaxmnuOut">Sign off</button>
+  <?php /* Ryan, Sep 6 2026 design audit: one name for the action, same as the settings page */ ?>
+  <button type="button" class="jaxmnu-item" id="jaxmnuOut">Sign out</button>
 </div>
 <script>
 (function(){
@@ -1705,7 +1726,8 @@ function jaxauth_frame_head() {
     . '<meta name="viewport" content="width=device-width,initial-scale=1"><style>'
     . jaxauth_tokens_css()
     . '*{box-sizing:border-box}'
-    . 'body{margin:0;background:var(--ground);color:var(--ink);font-family:' . jaxauth_font_stack() . ';font-size:15px;line-height:1.5}'
+    /* Ryan, Sep 6 2026 design audit: body 13.5/1.5, the type scale; inputs keep their own 15px */
+    . 'body{margin:0;background:var(--ground);color:var(--ink);font-family:' . jaxauth_font_stack() . ';font-size:13.5px;line-height:1.5}'
     . '.wrap{max-width:1080px;margin:0 auto;padding:6px 20px 14px}'
     . '.hd{border-bottom:3px solid var(--gold);padding-bottom:9px;margin-bottom:14px}'
     . '.hd .brand{display:block;font-weight:800;letter-spacing:.14em;font-size:13px;color:var(--brand);text-transform:uppercase}'
@@ -1731,7 +1753,8 @@ function jaxauth_frame_head() {
     . '.err.on{display:block}'
     . '.okmsg{display:none;background:var(--green-tint);border:1px solid var(--green-line);color:var(--green);border-radius:var(--r-md);padding:10px 12px;font-size:13.5px;margin-bottom:12px}'
     . '.okmsg.on{display:block}'
-    . '.note{background:var(--amber-tint);border:1px solid var(--amber-line);color:var(--amber);border-radius:var(--r-md);padding:10px 12px;font-size:13px;margin-bottom:12px}'
+    /* Ryan, Sep 6 2026 design audit: 13.5px like its .err/.okmsg siblings */
+    . '.note{background:var(--amber-tint);border:1px solid var(--amber-line);color:var(--amber);border-radius:var(--r-md);padding:10px 12px;font-size:13.5px;margin-bottom:12px}'
     . '.small{font-size:12.5px;color:var(--ink2)}'
     . 'table{width:100%;border-collapse:collapse}'
     . 'th{text-align:left;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);font-weight:800;padding:7px 9px;border-bottom:1px solid var(--hair);background:var(--tint)}'
@@ -1740,14 +1763,17 @@ function jaxauth_frame_head() {
     . '.urow{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:0;border-radius:var(--r-sm);padding:8px 9px;cursor:pointer;font:inherit;color:var(--ink)}'
     . '.urow:hover{background:var(--ground)}.urow.on{background:var(--ink);color:#fff}'
     . '.urow>span:first-child{min-width:0;overflow:hidden}'
-    . '.urow .em{display:block;font-size:11.5px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.urow.on .em{color:rgba(255,255,255,.72)}'
+    . '.urow .em{display:block;font-size:11.5px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.urow.on .em{color:var(--hair2)}'
+    /* Ryan, Sep 6 2026 design audit: tokens on the selected row, no alpha whites */
     . '.chip{margin-left:auto;font-size:11.5px;font-weight:800;letter-spacing:.04em;border-radius:var(--r-pill);padding:2px 8px;background:var(--track);color:var(--ink2)}'
-    . '.urow.on .chip{background:rgba(255,255,255,.16);color:#fff}'
+    . '.urow.on .chip{background:var(--panel);color:var(--ink)}'
     . '.grid2{display:grid;grid-template-columns:270px 1fr;gap:14px;align-items:start}'
     . '@media(max-width:820px){.grid2{grid-template-columns:1fr}}'
     . '.tg{position:relative;width:42px;height:24px;border-radius:var(--r-pill);border:0;cursor:pointer;background:var(--ink3)}'
-    . '.tg:after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--panel);box-shadow:0 1px 2px rgba(0,0,0,.18)}'
-    . '.tg.on{background:var(--green)}.tg.on:after{left:21px}'
+    /* Ryan, Sep 6 2026 design audit: the knob shadow is the token; an enabled toggle
+       is chrome, so it is navy like every other selected state here, not --green */
+    . '.tg:after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--panel);box-shadow:var(--shadow)}'
+    . '.tg.on{background:var(--ink)}.tg.on:after{left:21px}'
     . '.hstar{background:none;border:0;cursor:pointer;font:inherit;font-size:16px;line-height:1;color:var(--ink3);padding:0 3px;margin-left:4px;vertical-align:middle}.hstar.on{color:var(--gold)}'
     . '.arow{display:flex;gap:12px;padding:8px 2px;border-top:1px solid var(--hair);font-size:13px}'
     . '.arow time{flex:none;width:120px;color:var(--ink3);font-size:12.5px;font-variant-numeric:tabular-nums}'
@@ -1776,7 +1802,8 @@ function jaxauth_login_html() {
   ob_start(); ?>
 <?php echo jaxauth_frame_head(); ?>
 <div class="wrap" style="max-width:440px">
-  <div class="hd" style="text-align:center">
+  <?php /* Ryan, Sep 6 2026 design audit: left-aligned like every other header; the doc has no centered variant */ ?>
+  <div class="hd">
     <?php if (empty($GLOBALS['jaxauth_canvas_render'])): ?><span class="brand">JAXAERO</span><?php endif; ?>
     <h1>Sign in to your dashboard</h1>
     <div class="sub">Your dashboards, pay and documents in one place.</div>
@@ -1789,7 +1816,7 @@ function jaxauth_login_html() {
       <input id="pw" type="password" autocomplete="current-password"></div>
     <button class="b1" id="go" style="width:100%">Sign in</button>
   </div>
-  <p class="small" style="text-align:center;line-height:1.55">Forgot your password? <a href="<?= esc_url(wp_lostpassword_url()) ?>" target="_top" style="color:var(--ink);font-weight:700">Reset it by email</a>.<br>Five failed attempts locks sign-in for 15 minutes.<br>This page never asks for a Flight Schedule Pro login.</p>
+  <p class="small" style="line-height:1.55">Forgot your password? <a href="<?= esc_url(wp_lostpassword_url()) ?>" target="_top" style="color:var(--ink);font-weight:700">Reset it by email</a>.<br>Five failed attempts locks sign-in for 15 minutes.<br>This page never asks for a Flight Schedule Pro login.</p>
 </div>
 <script>
 (function(){
@@ -1831,10 +1858,12 @@ function jaxauth_home_html($u) {
 <div class="wrap">
   <div class="hd">
     <?php if (empty($GLOBALS['jaxauth_canvas_render'])): ?><span class="brand">JAXAERO</span><?php endif; ?>
-    <h1>Welcome, <?php echo esc_html($u->display_name); ?></h1>
+    <?php /* Ryan, Sep 6 2026 design audit: the h1 is the page name (the menu calls it Settings);
+             the canvas greeting is the one welcome. Sign out renders at the .b2 spec. */ ?>
+    <h1>Settings</h1>
     <div class="sub">Your account preferences. Signed in as <?php echo esc_html((string) $u->user_email !== '' ? $u->user_email : $u->user_login); ?>.</div>
   </div>
-  <div style="margin:0 0 14px"><button class="b2" id="out" style="padding:9px 16px;font-size:13px">Sign out</button></div>
+  <div style="margin:0 0 14px"><button class="b2" id="out">Sign out</button></div>
   <?php if ($must) { ?><div class="note"><b>Please choose a new password now.</b> The one you signed in with was temporary.</div><?php } ?>
   <div class="mod" id="chpw" style="max-width:430px">
     <b>Change your password</b>
@@ -1979,11 +2008,12 @@ function jaxauth_admin_html() {
     <h1>Access admin</h1>
     <div class="sub">Pick a person, flip toggles, save. Changes apply on their next page load. Every save is logged below.</div>
   </div>
-  <div style="display:flex;gap:10px;align-items:center;margin:0 0 14px;flex-wrap:wrap"><a class="b2" href="<?php echo esc_url($itUrl); ?>" target="_top" style="font-size:12.5px;padding:7px 14px">IT status</a><span class="small">How every tool, server and job behind the dashboard is doing.</span></div>
+  <?php /* Ryan, Sep 6 2026 design audit: no inline font-size or padding on buttons - .b1/.b2 render at the 13.5px / 9px 16px spec */ ?>
+  <div style="display:flex;gap:10px;align-items:center;margin:0 0 14px;flex-wrap:wrap"><a class="b2" href="<?php echo esc_url($itUrl); ?>" target="_top">IT status</a><span class="small">How every tool, server and job behind the dashboard is doing.</span></div>
   <div class="grid2">
     <div class="mod ulist">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
-        <span class="cardh" style="margin-bottom:0">People</span><button class="b2" id="addU" style="padding:5px 12px;font-size:12.5px">+ Add user</button></div>
+        <span class="cardh" style="margin-bottom:0">People</span><button class="b2" id="addU">+ Add user</button></div>
       <div id="ulist"></div>
     </div>
     <div class="mod">
@@ -1994,9 +2024,10 @@ function jaxauth_admin_html() {
         <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Pay page binding</label><select id="db"></select></div>
         <label class="small" style="display:flex;align-items:center;gap:6px;padding-bottom:4px"><input type="checkbox" id="dd"> Disabled</label>
         <label class="small" id="admwrap" style="display:flex;align-items:center;gap:8px;padding-bottom:4px" title="Dashboard admin can open Access admin, view as anyone and see every gated page. Only a WordPress administrator can change it."><button type="button" class="tg" id="adm" aria-label="toggle dashboard admin"></button> Dashboard admin</label>
-        <button class="b2" id="resetPw" style="font-size:12.5px">Reset password</button>
-        <button class="b2" id="viewAs" style="font-size:12.5px">View as user</button>
-        <button class="b2 bdel" id="delU" style="font-size:12.5px">Delete user</button>
+        <?php /* Ryan, Sep 6 2026 design audit: no inline font-size, .b2 renders at the 13.5px spec */ ?>
+        <button class="b2" id="resetPw">Reset password</button>
+        <button class="b2" id="viewAs">View as user</button>
+        <button class="b2 bdel" id="delU">Delete user</button>
       </div>
       <div style="overflow-x:auto"><table id="mx">
         <tr><th>Widget</th><th></th><th style="width:48px">On</th></tr>
@@ -2021,7 +2052,8 @@ function jaxauth_admin_html() {
     <div class="small" style="margin-bottom:8px">This box takes ONLY the Anthropic API key that powers invoice reading. It is not a place to upload documents. Stored server-side and never shown again after saving. Status: <span id="aist"><?php echo esc_html($aiSet); ?></span></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <input type="password" id="aikey" placeholder="sk-ant-..." autocomplete="off" style="flex:1;min-width:220px;font:inherit;padding:10px 12px;border:1px solid var(--hair2);border-radius:var(--r-sm);color:var(--ink);background:var(--panel)">
-      <button class="b1" id="aisave" style="font-size:13px">Save key</button>
+      <?php /* Ryan, Sep 6 2026 design audit: no inline font-size, .b1 renders at the 13.5px spec */ ?>
+      <button class="b1" id="aisave">Save key</button>
     </div>
     <div id="ainote" class="small" style="margin-top:8px;font-weight:700;color:var(--green);<?php echo $aiNote === '' ? 'display:none' : ''; ?>"><?php echo esc_html($aiNote); ?></div>
   </div>
@@ -2099,7 +2131,8 @@ function jaxauth_admin_html() {
       if(fo.braking_avg!=null){h+='<br>Braking: '+fo.braking_avg+' G';}
       if(fo.go_around_pct!=null){h+='<br>Go-around: '+fo.go_around_pct+'%';}
       if(mi.length){h+='<br><span style="color:var(--amber)">Not found: '+esc(mi.join('; '))+'. Nothing saved yet.</span>';}
-      h+='<br><button type="button" class="b1" id="fqaSave" style="font-size:13px;margin-top:8px"'+(fo.month_key?'':' disabled')+'>Save '+esc(fo.label||'')+'</button>';
+      /* Ryan, Sep 6 2026 design audit: no inline font-size, .b1 renders at the 13.5px spec */
+      h+='<br><button type="button" class="b1" id="fqaSave" style="margin-top:8px"'+(fo.month_key?'':' disabled')+'>Save '+esc(fo.label||'')+'</button>';
       ou.innerHTML=h;ou.style.display='';
       var b=document.getElementById('fqaSave');if(b){b.addEventListener('click',save);}
     }
