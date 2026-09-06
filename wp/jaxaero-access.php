@@ -98,7 +98,12 @@ function jaxauth_registry() {
     'sales'     => ['Sales', 'pipeline, enrollment tracking and commissions'],
     'marketing' => ['Marketing', 'Meta Ads + ad campaigns'],
     'safety'    => ['Safety', 'company-wide FOQA safety data'],
-    'mxtime'    => ['MX Timeclock', 'mechanic clock in/out, pay and task mix'],
+    /* Ben, Sep 6 2026: "Rebrand 'Timeclock' to 'My Hours'". The "(MX)" suffix keeps
+       this grant distinct from the instructors' own My Hours in the Access admin
+       list - theirs is the binding-driven 'myhours' canvas key, not a grant. Ben
+       also asked to "Remove the Pay column entirely", so the blurb no longer
+       promises pay here. */
+    'mxtime'    => ['My Hours (MX)', 'mechanic clock in/out and hours by pay period'],
     'tax'       => ['Sales tax', 'aircraft sales tax page'],
     'lease'     => ['Leases', 'lease management - VR Leasing aircraft'],
     'depr'      => ['Depreciation', 'fixed assets - book and tax depreciation'],
@@ -1171,7 +1176,10 @@ function jaxauth_canvas_widgets($u) {
     array('auto', '[jaxaero_revenue_auto]', 'Revenue Dashboard'),
     array('pay', '[jaxaero_payroll]', 'Pay Portal'),
     array('safety', '[jaxaero_safety]', 'Safety'),
-    array('mxtime', '[jaxaero_mx_time]', 'MX Timeclock'),
+    /* Ben, Sep 6 2026: "Rebrand 'Timeclock' to 'My Hours'" - this label is the
+       hamburger-menu text and the canvas tab text. The department bubble the
+       widget sits in stays 'MX' ($gmap / $gorder below), like Accounting. */
+    array('mxtime', '[jaxaero_mx_time]', 'My Hours'),
     array('ownerstmt', '[jaxaero_aircraft_owner]', 'Aircraft Owner Statements'),
     array('owner', '[jaxaero_owner_portal]', 'My Aircraft'),
     array('lessor', '[jaxaero_lessor]', 'Lease statements'),
@@ -1221,6 +1229,17 @@ function jaxauth_canvas_widgets($u) {
         if (!is_array($cvsCt) || !in_array(sanitize_title($bound), $cvsCt, true)) { $out[] = array('key' => 'myhours', 'tag' => '[jaxaero_my_hours key="' . esc_attr(sanitize_title($bound)) . '"]', 'label' => 'My Hours'); }
       }
     }
+  }
+  /* Ben, Sep 6 2026 review: the MX 'mxtime' entry and the instructors'
+     binding-driven 'myhours' entry are both labeled 'My Hours' - Ben's words
+     for each. Nobody holds both today (Ben and Ryan hold mxtime and neither
+     is bound to an instructor pay page). If someone ever does, the MX entry
+     takes the registry's "(MX)" suffix so the hamburger menu and the loading
+     placeholders do not show two identical 'My Hours'. Mechanics, who hold
+     only mxtime, keep the plain label Ben asked for. */
+  $cvsKeys = array_map(function ($x) { return $x['key']; }, $out);
+  if (in_array('mxtime', $cvsKeys, true) && in_array('myhours', $cvsKeys, true)) {
+    foreach ($out as $cvsI => $cvsW) { if ($cvsW['key'] === 'mxtime') { $out[$cvsI]['label'] = 'My Hours (MX)'; } }
   }
   return $out;
 }
@@ -1471,7 +1490,9 @@ add_shortcode('jaxauth_user_canvas', function () {
       $bodyH .= '<div class="jaxdash-g" id="jaxg-' . $gi . '" data-gkeys="">'
         . '<div class="jaxmx"><div class="jaxmx-hd"><div class="jaxmx-t">MX portal coming soon!</div>'
         . '<div class="jaxmx-sub">Maintenance department tools will live here.</div></div>'
-        . '<div class="jaxmx-mod">Nothing to show yet. The mechanic timeclock, task mix and MX pay views land in this tab when they are built.</div></div></div>';
+        /* Ben, Sep 6 2026: "Rebrand 'Timeclock' to 'My Hours'" - the admin-only
+           empty state names the feature the way the mechanics will see it. */
+        . '<div class="jaxmx-mod">Nothing to show yet. The mechanic My Hours timeclock, task mix and MX pay views land in this tab when they are built.</div></div></div>';
     }
     $html .= '<div class="jaxdash-tabs" id="jaxdashTabs">' . $tabsH . '</div>' . $bodyH;
     $html .= '<script>(function(){var tabs=document.querySelectorAll(".jaxdash-tab");var gs=document.querySelectorAll(".jaxdash-g");'
