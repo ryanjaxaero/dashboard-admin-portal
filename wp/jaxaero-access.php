@@ -1275,10 +1275,9 @@ function jaxauth_canvas_widgets($u) {
        gets their own pay page beside My Hours, on the same toggle. Editors who hold
        the toggle without a clock (Ryan, Ben, Kim, John) do not - they have the Pay
        Portal. Listed only once snippet 18 provides the shortcode. */
-    if ($w[0] === 'mxtime' && in_array('mxtime', $cvsG, true) && shortcode_exists('jaxaero_mx_pay')
-        && (string) get_user_meta($u->ID, 'jaxmx_mechanic', true) !== '') {
-      $out[] = array('key' => 'mxpay', 'tag' => '[jaxaero_mx_pay]', 'label' => 'My Pay');
-    }
+    /* Ben, Sep 7 2026 (punch list 14): "For now, no My Pay functionality for mechanics at
+       all. Lets limit functionality to hours." The mechanic My Pay page is no longer
+       listed; the shortcode stays in snippet 18 for the day it comes back. */
     /* Ryan, Sep 7 2026: "In the MX area, I want a logbook tab." Every My Hours holder
        (mechanics and editors alike) gets the aircraft logbooks, listed only while
        snippet 23 provides the shortcode. */
@@ -1455,8 +1454,11 @@ add_shortcode('jaxauth_user_canvas', function () {
      top-level tabs. A bound mechanic (the widget list carries 'mxpay' only for one)
      gets the same shape: their clock is the My Hours tab, their pay page the My Pay
      tab, no department bubble. Editors without a clock keep the MX bubble. */
-  $cvsMech = false;
-  foreach ($tags as $cvsT) { if ($cvsT['key'] === 'mxpay') { $cvsMech = true; break; } }
+  /* Sep 7 2026: a bound mechanic is recognised by the binding itself (user meta
+     jaxmx_mechanic) now that My Pay is no longer listed for them */
+  $cvsHasMx = false;
+  foreach ($tags as $cvsT) { if ($cvsT['key'] === 'mxtime') { $cvsHasMx = true; break; } }
+  $cvsMech = $cvsHasMx && (string) get_user_meta($u->ID, 'jaxmx_mechanic', true) !== '';
   /* a bound mechanic's logbooks are their own Logbook tab after My Pay (Sep 7 2026) */
   if ($cvsMech) { $gmap['mxtime'] = 'My Hours'; $gmap['mxlog'] = 'Logbook'; }
   /* Ben, Sep 2 (punch list 13B): Log Detailing leads so Sam's canvas opens on
