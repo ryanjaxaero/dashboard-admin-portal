@@ -1030,6 +1030,13 @@ function jaxauth_rest_viewas(WP_REST_Request $req) {
   $from = ($from !== '') ? wp_validate_redirect(esc_url_raw($from), '') : '';
   if ($from !== '') { set_transient('jaxauth_viewas_from_' . get_current_user_id(), $from, 15 * MINUTE_IN_SECONDS); }
   else { delete_transient('jaxauth_viewas_from_' . get_current_user_id()); }
+  /* Ryan, Sep 7 2026: the preview header names where its Back button goes ("Back to
+     Pay Portal"), so the launcher may send a short human label for the origin. Plain
+     text, capped, and only kept when there is an origin to go back to. */
+  $fromLabel = sanitize_text_field((string) $req->get_param('fromLabel'));
+  $fromLabel = function_exists('mb_substr') ? mb_substr($fromLabel, 0, 40) : substr($fromLabel, 0, 40);
+  if ($from !== '' && $fromLabel !== '') { set_transient('jaxauth_viewas_fromlabel_' . get_current_user_id(), $fromLabel, 15 * MINUTE_IN_SECONDS); }
+  else { delete_transient('jaxauth_viewas_fromlabel_' . get_current_user_id()); }
   jaxauth_log_add('started a 15-minute view-as preview of "' . $t->display_name . '".');
   $p = get_option('jaxauth_signin_page');
   return ['ok' => true, 'start' => $p ? get_permalink($p) : home_url('/')];
@@ -1091,6 +1098,7 @@ add_action('init', function () {
   if ($uid) {
     $back = (string) get_transient('jaxauth_viewas_from_' . $uid);
     delete_transient('jaxauth_viewas_from_' . $uid);
+    delete_transient('jaxauth_viewas_fromlabel_' . $uid);
     if ($back !== '') { $back = wp_validate_redirect($back, ''); }
   }
   if ($uid && get_transient('jaxauth_viewas_' . $uid)) {
@@ -1111,28 +1119,67 @@ function jaxauth_viewas_banner() {
   $t = get_user_by('id', (int) $GLOBALS['jaxauth_viewas_target']);
   $name = $t ? $t->display_name : 'user';
   $exit = esc_url(add_query_arg('jaxviewas', 'off', home_url('/')));
+  /* Ryan, Sep 7 2026: "When I click IP View ... I want a button that returns me to
+     the previous screen" and "It should be a preview screen, not the instructor's
+     actual screen." The bar was a thin strip fixed to the bottom of the page whose
+     link said Exit preview, so the page read as the instructor's real screen with a
+     footnote. It is now a preview header fixed to the TOP: a PREVIEW chip, the
+     person's name, and a Back button that names where it goes. The page is also
+     framed in the amber line so no scroll position can pass for the real thing.
+     This prints under the swapped identity, so the origin transients are read with
+     the real admin id that jaxauth_viewas_boot recorded. The exit handler is the
+     one that deletes them. */
+  $real = isset($GLOBALS['jaxauth_viewas_real']) ? (int) $GLOBALS['jaxauth_viewas_real'] : 0;
+  $from = $real ? (string) get_transient('jaxauth_viewas_from_' . $real) : '';
+  $from = ($from !== '') ? (string) wp_validate_redirect($from, '') : '';
+  $fromLabel = $real ? (string) get_transient('jaxauth_viewas_fromlabel_' . $real) : '';
+  $btn = ($from !== '') ? ('Back to ' . ($fromLabel !== '' ? $fromLabel : 'previous screen')) : 'Exit preview';
   ?>
 <style>
 <?php echo jaxauth_tokens_css(); ?>
 /* Ryan, Sep 6 2026 design audit: the house amber alert surface (--amber-tint fill,
-   --amber-line border, --amber text) instead of a solid amber fill with white text
-   and literal rgba() shadows; Exit preview is a .b2-sized outline button. */
-.jaxva{position:fixed;left:0;right:0;bottom:0;z-index:2147483000;background:var(--amber-tint) !important;color:var(--amber) !important;border-top:1px solid var(--amber-line);font-family:<?php echo jaxauth_font_stack(); ?> !important;font-size:13.5px !important;line-height:1.5 !important;padding:10px 16px !important;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+   --amber-line border, --amber text); the button is the .b2 set in amber. */
+/* Ryan, Sep 7 2026, measured live: a theme script rewrites this element's inline style
+   after load (position:static, top, transform - the sticky-header signature), which
+   dropped the bar into the page flow 656px down. The geometry is pinned with
+   !important, which outranks an inline style, the same way the house pins every
+   other non-iframe element against the Elementor kit (elementor-theme-bleed). */
+.jaxva{position:fixed !important;left:0 !important;right:0 !important;top:0 !important;bottom:auto !important;transform:none !important;width:auto !important;margin:0 !important;z-index:2147483000 !important;background:var(--amber-tint) !important;color:var(--amber) !important;border-bottom:1px solid var(--amber-line);font-family:<?php echo jaxauth_font_stack(); ?> !important;font-size:13.5px !important;line-height:1.5 !important;padding:9px 20px !important;display:flex !important;align-items:center !important;justify-content:space-between !important;gap:14px !important;flex-wrap:wrap !important;box-sizing:border-box !important}
 .jaxva b{color:var(--amber) !important;font-weight:800 !important}
-.jaxva .jaxva-x{color:var(--amber) !important;background:var(--panel) !important;border:1px solid var(--amber-line) !important;border-radius:var(--r-sm) !important;padding:9px 16px !important;font-weight:700 !important;font-size:13.5px !important;text-decoration:none !important;letter-spacing:0 !important;text-transform:none !important}
+.jaxva .jaxva-chip{display:inline-block;font-size:11.5px !important;font-weight:800 !important;letter-spacing:.08em !important;text-transform:uppercase !important;background:var(--amber) !important;color:#fff !important;padding:2px 9px !important;border-radius:var(--r-pill) !important;margin-right:10px !important;vertical-align:1px}
+.jaxva .jaxva-x{color:var(--amber) !important;background:var(--panel) !important;border:1px solid var(--amber-line) !important;border-radius:var(--r-sm) !important;padding:9px 16px !important;font-weight:700 !important;font-size:13.5px !important;text-decoration:none !important;letter-spacing:0 !important;text-transform:none !important;white-space:nowrap;flex:0 0 auto}
 .jaxva .jaxva-x:hover{background:var(--tint) !important;color:var(--amber) !important}
-/* Ryan, Sep 6 2026 graphics and mobile review: reserve the space this fixed
-   bar occupies so it never overlaps page content underneath it. 130px covers
-   the worst case (sentence wraps to 3 lines plus the button on phone widths);
-   56px covers the normal single-line height at 560px and up. Scoped to the
-   same conditional print as .jaxva, so it disappears with the banner. */
-body{padding-bottom:130px !important}
-@media(min-width:560px){body{padding-bottom:56px !important}}
+/* the frame: a fixed amber line around the whole viewport, click-through, so the
+   preview is recognizable at any scroll position. Sits just under the header. */
+.jaxva-frame{position:fixed;left:0;right:0;top:0;bottom:0;z-index:2147482999;pointer-events:none;border:3px solid var(--amber-line);box-sizing:border-box}
+/* Ryan, Sep 6 2026 graphics and mobile review: reserve the space this fixed bar
+   occupies so it never overlaps page content underneath it. 130px covers the worst
+   case (sentence wraps to 3 lines plus the button on phone widths); 56px covers the
+   normal single-line height at 560px and up. Scoped to the same conditional print
+   as .jaxva, so it disappears with the header. */
+body{padding-top:130px !important}
+@media(min-width:560px){body{padding-top:56px !important}}
+@media(max-width:560px){.jaxva .jaxva-x{min-height:44px !important;display:inline-flex !important;align-items:center !important}}
 </style>
-<div class="jaxva">
-  <span>Preview: you are seeing the portal exactly as <b><?php echo esc_html($name); ?></b> sees it. Buttons that save or send will not work in this preview.</span>
-  <a class="jaxva-x" href="<?php echo $exit; ?>">Exit preview</a>
+<div class="jaxva-frame" aria-hidden="true"></div>
+<div class="jaxva" role="status">
+  <span><span class="jaxva-chip">Preview</span>You are looking at the portal as <b><?php echo esc_html($name); ?></b> sees it. Nothing here saves or sends.</span>
+  <a class="jaxva-x" href="<?php echo $exit; ?>" data-exit="<?php echo $exit; ?>" data-back="<?php echo esc_url($from); ?>"><?php echo esc_html($btn); ?></a>
 </div>
+<script>
+/* Ryan, Sep 7 2026: a preview that the Pay Portal opened in its OWN tab arrives with
+   jaxip=tab on the URL. Its Back button ends the preview server-side, then closes
+   this tab so the person lands on the Pay Portal tab they left - instead of loading
+   a second copy of it here. If the browser refuses to close the tab, fall back to a
+   plain navigation to the origin (the preview is already ended by then). Same-tab
+   previews keep the ordinary link. */
+(function(){var a=document.querySelector('.jaxva-x');if(!a){return;}
+if(!/[?&]jaxip=tab(?:&|$)/.test(window.location.search)){return;}
+a.addEventListener('click',function(e){e.preventDefault();
+var u=a.getAttribute('data-exit')||a.getAttribute('href');var back=a.getAttribute('data-back')||u;var done=false;
+function go(){if(done){return;}done=true;window.location.href=back;}
+fetch(u,{credentials:'same-origin'}).then(function(){try{window.close();}catch(x){}setTimeout(go,400);}).catch(go);});})();
+</script>
   <?php
 }
 
