@@ -1567,6 +1567,30 @@ add_shortcode('jaxauth_user_canvas', function () {
        canvas opens on at EVERY load - Sam Davis starts on Log Detailing. The
        remembered-tab cookie only steers users who have no home set. */
     $homeK = (string) get_user_meta($u->ID, 'jaxauth_home', true);
+    /* Ben, Sep 7 2026 (punch list 14): "All instructor Dashboard default interface should
+       be the Safety Page (Safety First). Right now it is defaulting to my hours." Safety
+       already led the instructor's tab order; what put them on My Hours was the year-long
+       remembered-tab cookie (and an admin's own saved index inside a View-as preview). So
+       an instructor canvas - the only kind carrying BOTH a Safety bubble and the
+       binding-driven instructor My Hours key, never a contractor, never an editor - gets
+       Safety as a derived home unless one is stored. The same rule pins a bound mechanic
+       to the MX Briefing (Ryan, Sep 7: "landing tab for mechanics"). $gorder is untouched,
+       so nobody's saved index moves; a #jaxw- deep link still wins for that one load.
+       Shapes, decided before branching: an INSTRUCTOR canvas (Safety + the 'myhours' key)
+       wins over the mechanic rule, so Chandara - instructor and bound mechanic - lands on
+       Safety like every instructor; a MECHANIC canvas is a bound mechanic WITHOUT any staff
+       department (no Accounting / Payroll / Airplanes), so an editor bound for testing
+       (Ben as ben-test, or Kim / John if they are bound for a live overtime test) keeps
+       their remembered tab. */
+    if ($homeK === '') {
+      $cvsInstr = false;
+      if (isset($groups['Safety'], $groups['My Hours'])) {
+        foreach ($groups['My Hours'] as $cvsHx) { if ($cvsHx['key'] === 'myhours') { $cvsInstr = true; break; } }
+      }
+      $cvsMechOnly = !empty($cvsMech) && isset($groups['MX Briefing']) && !isset($groups['Accounting']) && !isset($groups['Payroll']) && !isset($groups['Airplanes']);
+      if ($cvsInstr) { $homeK = 'safety'; }
+      elseif ($cvsMechOnly) { $homeK = 'mxbrief'; }
+    }
     $homeG = -1;
     if ($homeK !== '') {
       $hgi = 0;
@@ -1623,7 +1647,9 @@ add_shortcode('jaxauth_user_canvas', function () {
       $bodyH .= '</div>';
       $gi++;
     }
-    if (jaxauth_is_admin($u) && !isset($groups['MX'])) {
+    /* Sep 7 2026: an admin bound as a test mechanic (Ben as ben-test) already carries the MX
+       widgets as their own bubbles, so the "coming soon" placeholder must not appear too */
+    if (jaxauth_is_admin($u) && !isset($groups['MX']) && empty($cvsMech)) {
       $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">MX</button>';
       $bodyH .= '<div class="jaxdash-g" id="jaxg-' . $gi . '" data-gkeys="">'
         . '<div class="jaxmx"><div class="jaxmx-hd"><div class="jaxmx-t">MX portal coming soon!</div>'
@@ -1634,8 +1660,12 @@ add_shortcode('jaxauth_user_canvas', function () {
         . '<div class="jaxmx-mod">Nothing to show yet. The mechanic My Hours, task mix and MX pay views land in this tab when they are built.</div></div></div>';
     }
     $html .= '<div class="jaxdash-tabs" id="jaxdashTabs">' . $tabsH . '</div>' . $bodyH;
-    $html .= '<script>(function(){var tabs=document.querySelectorAll(".jaxdash-tab");var gs=document.querySelectorAll(".jaxdash-g");'
-      . 'function act(i){for(var x=0;x<gs.length;x++){gs[x].classList.toggle("on",x===i);}for(var x=0;x<tabs.length;x++){tabs[x].classList.toggle("on",x===i);}try{localStorage.setItem("jaxDashTab",String(i));}catch(e){}try{document.cookie="jaxDashTab="+i+";path=/;max-age=31536000;SameSite=Lax;Secure";}catch(e2){}}'
+    /* Sep 7 2026 review: a View-as / IP View preview runs under the target's identity but
+       in the ADMIN's browser, so remembering the tab there would overwrite the admin's own
+       saved index with the previewed person's (Safety = 0 on an instructor canvas). PV=1
+       keeps the preview from persisting anything. */
+    $html .= '<script>(function(){var tabs=document.querySelectorAll(".jaxdash-tab");var gs=document.querySelectorAll(".jaxdash-g");var PV=' . (!empty($GLOBALS['jaxauth_viewas_target']) ? 1 : 0) . ';'
+      . 'function act(i){for(var x=0;x<gs.length;x++){gs[x].classList.toggle("on",x===i);}for(var x=0;x<tabs.length;x++){tabs[x].classList.toggle("on",x===i);}if(PV){return;}try{localStorage.setItem("jaxDashTab",String(i));}catch(e){}try{document.cookie="jaxDashTab="+i+";path=/;max-age=31536000;SameSite=Lax;Secure";}catch(e2){}}'
       . 'for(var x=0;x<tabs.length;x++){(function(i){tabs[i].addEventListener("click",function(){act(i);});})(x);}'
       . 'function byHash(){var h=(window.location.hash||"").replace("#jaxw-","");if(!h){return -1;}for(var x=0;x<gs.length;x++){var ks=(gs[x].getAttribute("data-gkeys")||"").split(",");if(ks.indexOf(h)>-1){return x;}}return -1;}'
       . 'var st=0;try{st=parseInt(localStorage.getItem("jaxDashTab")||"0",10)||0;}catch(e){}if(st<0||st>=gs.length){st=0;}'
