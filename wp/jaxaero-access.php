@@ -104,6 +104,12 @@ function jaxauth_registry() {
        also asked to "Remove the Pay column entirely", so the blurb no longer
        promises pay here. */
     'mxtime'    => ['My Hours (MX)', 'mechanic clock in/out and hours by pay period'],
+    /* Ryan, Sep 7 2026: "I want edit hours, especially for the MX department, to be a
+       toggle that we can turn on for Bruce, the maintenance manager. Non-manager MX
+       techs should not be able to do anything other than clock in and clock out."
+       This is that toggle. It adds the Edit hours tab inside My Hours (MX); a tech
+       without it sees the clock alone and asks a manager to fix a mistake. */
+    'mxedit'    => ['Edit MX hours', 'add or fix hours for every mechanic by pay period - the maintenance manager'],
     'tax'       => ['Sales tax', 'aircraft sales tax page'],
     'lease'     => ['Leases', 'lease management - VR Leasing aircraft'],
     'depr'      => ['Depreciation', 'fixed assets - book and tax depreciation'],
@@ -133,6 +139,8 @@ function jaxauth_shortcode_map() {
     'jaxaero_marketing'      => 'marketing',
     'jaxaero_safety'         => 'safety',
     'jaxaero_mx_time'        => 'mxtime',
+    /* Ryan, Sep 7 2026: a mechanic's own pay page rides on the same My Hours toggle */
+    'jaxaero_mx_pay'         => 'mxtime',
     'jaxaero_sales_marketing' => 'sm',
     'jaxaero_tax'            => 'tax',
     'jaxaero_requests'       => 'requests',
@@ -1260,6 +1268,15 @@ function jaxauth_canvas_widgets($u) {
        a person holding both keys gets ONE Depreciation tab, the writing one. */
     if ($w[0] === 'depr_view' && in_array('depr', $cvsG, true)) { continue; }
     if (in_array($w[0], $cvsG, true)) { $out[] = array('key' => $w[0], 'tag' => $w[1], 'label' => $w[2]); }
+    /* Ryan, Sep 7 2026: "MX users should be My hours and My pay." A person BOUND to a
+       mechanic clock (user meta jaxmx_mechanic, written only by the admin bind route)
+       gets their own pay page beside My Hours, on the same toggle. Editors who hold
+       the toggle without a clock (Ryan, Ben, Kim, John) do not - they have the Pay
+       Portal. Listed only once snippet 18 provides the shortcode. */
+    if ($w[0] === 'mxtime' && in_array('mxtime', $cvsG, true) && shortcode_exists('jaxaero_mx_pay')
+        && (string) get_user_meta($u->ID, 'jaxmx_mechanic', true) !== '') {
+      $out[] = array('key' => 'mxpay', 'tag' => '[jaxaero_mx_pay]', 'label' => 'My Pay');
+    }
     if ($w[0] === 'owner') {
       /* the person's own pay page sits after statements, before the tools */
       $ipd = jaxauth_invoice_page($u);
@@ -1423,7 +1440,16 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* Ryan, Sep 4 2026 (lease): the Revenue bubble is now the Accounting
      department (Revenue / Sales tax / Leases / Depreciation as a sub-menu, see $subGroups
      below); the lessor's statements are their own bubble. */
-  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease statements');
+  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease statements', 'mxpay' => 'My Pay');
+  /* Ryan, Sep 7 2026: "MX users should be My hours and My pay ... model the user
+     experience for MX users after that of 1099 contractors (with regard to
+     navigation)." A contractor's canvas is work area first, then My Pay, as plain
+     top-level tabs. A bound mechanic (the widget list carries 'mxpay' only for one)
+     gets the same shape: their clock is the My Hours tab, their pay page the My Pay
+     tab, no department bubble. Editors without a clock keep the MX bubble. */
+  $cvsMech = false;
+  foreach ($tags as $cvsT) { if ($cvsT['key'] === 'mxpay') { $cvsMech = true; break; } }
+  if ($cvsMech) { $gmap['mxtime'] = 'My Hours'; }
   /* Ben, Sep 2 (punch list 13B): Log Detailing leads so Sam's canvas opens on
      it with My Pay as the next tab. Safety now precedes My Pay and My Hours
      follows it, so an instructor's tabs read Safety / My Pay / My Hours. Nobody
@@ -1437,6 +1463,19 @@ add_shortcode('jaxauth_user_canvas', function () {
   foreach ($gorder as $gl) { $groups[$gl] = array(); }
   foreach ($tags as $t) { $gl = isset($gmap[$t['key']]) ? $gmap[$t['key']] : 'Documents'; $groups[$gl][] = $t; }
   $groups = array_filter($groups);
+  /* Ryan, Sep 7 2026: for a mechanic the landing tab is My Hours, with My Pay next -
+     the contractor order (work area, then pay). $gorder keeps Ben's instructor order
+     (Safety / My Pay / My Hours) for everyone else, so only the mechanic's two tabs
+     swap, and the first group is the default tab a fresh browser opens on. */
+  if ($cvsMech && isset($groups['My Hours'], $groups['My Pay'])) {
+    $cvsRe = array();
+    foreach ($groups as $cvsGl => $cvsGv) {
+      if ($cvsGl === 'My Pay') { continue; }
+      $cvsRe[$cvsGl] = $cvsGv;
+      if ($cvsGl === 'My Hours') { $cvsRe['My Pay'] = $groups['My Pay']; }
+    }
+    $groups = $cvsRe;
+  }
   $isDash = count($groups) > 1;
   $lazyKeys = array();
   $phFn = function ($t) {
