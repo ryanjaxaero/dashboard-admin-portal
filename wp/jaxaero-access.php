@@ -92,7 +92,7 @@ if (!defined('JAXAUTH_LOCK_SECS')) { define('JAXAUTH_LOCK_SECS', 900); }
 function jaxauth_registry() {
   return [
     'auto'      => ['Revenue - AUTO', 'auto-refreshed dashboard'],
-    'pay'       => ['Payroll widget', 'the Pay Portal - instructors, contractors, W2, MX'],
+    'pay'       => ['Payroll widget', 'the Pay Portal - instructors, contractors, salaried, MX'],
     'pay.rates' => ['Rate editor', 'pay rates page'],
     'bonus'     => ['Bonus & review editor', 'add checkride passes + review mentions'],
     'sales'     => ['Sales', 'pipeline, enrollment tracking and commissions'],
