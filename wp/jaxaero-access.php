@@ -141,6 +141,8 @@ function jaxauth_shortcode_map() {
     'jaxaero_mx_time'        => 'mxtime',
     /* Ryan, Sep 7 2026: a mechanic's own pay page rides on the same My Hours toggle */
     'jaxaero_mx_pay'         => 'mxtime',
+    /* Ryan, Sep 7 2026: the aircraft logbooks (snippet 23) live in the MX area on the same toggle */
+    'jaxaero_mx_logbook'     => 'mxtime',
     'jaxaero_sales_marketing' => 'sm',
     'jaxaero_tax'            => 'tax',
     'jaxaero_requests'       => 'requests',
@@ -1277,6 +1279,12 @@ function jaxauth_canvas_widgets($u) {
         && (string) get_user_meta($u->ID, 'jaxmx_mechanic', true) !== '') {
       $out[] = array('key' => 'mxpay', 'tag' => '[jaxaero_mx_pay]', 'label' => 'My Pay');
     }
+    /* Ryan, Sep 7 2026: "In the MX area, I want a logbook tab." Every My Hours holder
+       (mechanics and editors alike) gets the aircraft logbooks, listed only while
+       snippet 23 provides the shortcode. */
+    if ($w[0] === 'mxtime' && in_array('mxtime', $cvsG, true) && shortcode_exists('jaxaero_mx_logbook')) {
+      $out[] = array('key' => 'mxlog', 'tag' => '[jaxaero_mx_logbook]', 'label' => 'Logbook');
+    }
     if ($w[0] === 'owner') {
       /* the person's own pay page sits after statements, before the tools */
       $ipd = jaxauth_invoice_page($u);
@@ -1440,7 +1448,7 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* Ryan, Sep 4 2026 (lease): the Revenue bubble is now the Accounting
      department (Revenue / Sales tax / Leases / Depreciation as a sub-menu, see $subGroups
      below); the lessor's statements are their own bubble. */
-  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease statements', 'mxpay' => 'My Pay');
+  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease statements', 'mxpay' => 'My Pay', 'mxlog' => 'MX');
   /* Ryan, Sep 7 2026: "MX users should be My hours and My pay ... model the user
      experience for MX users after that of 1099 contractors (with regard to
      navigation)." A contractor's canvas is work area first, then My Pay, as plain
@@ -1449,7 +1457,8 @@ add_shortcode('jaxauth_user_canvas', function () {
      tab, no department bubble. Editors without a clock keep the MX bubble. */
   $cvsMech = false;
   foreach ($tags as $cvsT) { if ($cvsT['key'] === 'mxpay') { $cvsMech = true; break; } }
-  if ($cvsMech) { $gmap['mxtime'] = 'My Hours'; }
+  /* a bound mechanic's logbooks are their own Logbook tab after My Pay (Sep 7 2026) */
+  if ($cvsMech) { $gmap['mxtime'] = 'My Hours'; $gmap['mxlog'] = 'Logbook'; }
   /* Ben, Sep 2 (punch list 13B): Log Detailing leads so Sam's canvas opens on
      it with My Pay as the next tab. Safety now precedes My Pay and My Hours
      follows it, so an instructor's tabs read Safety / My Pay / My Hours. Nobody
@@ -1458,7 +1467,9 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* 'Accounting' sits at the index 'Revenue' held so saved jaxDashTab cookies
      keep pointing at the same bubble; 'Lease statements' is appended LAST so
      no existing user's group index moves (nobody holds 'lessor' yet). */
-  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'My Pay', 'My Hours', 'Sales & Marketing', 'MX', 'Documents', 'Lease statements');
+  /* 'Logbook' (a bound mechanic's third tab) sits right after 'My Hours' so the
+     reorder below yields My Hours / My Pay / Logbook; nobody held it before Sep 7 2026. */
+  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'My Pay', 'My Hours', 'Logbook', 'Sales & Marketing', 'MX', 'Documents', 'Lease statements');
   $groups = array();
   foreach ($gorder as $gl) { $groups[$gl] = array(); }
   foreach ($tags as $t) { $gl = isset($gmap[$t['key']]) ? $gmap[$t['key']] : 'Documents'; $groups[$gl][] = $t; }
@@ -1558,8 +1569,9 @@ add_shortcode('jaxauth_user_canvas', function () {
        first (or the stored home's) sub-panel of the shown bubble is inlined;
        the rest are lazy placeholders the loader still fetches - it drains its
        whole queue, visible or not. A group with a single widget gets no strip. */
-    $subGroups = array('Accounting');
-    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation');
+    /* Ryan, Sep 7 2026: the MX bubble is a department too - My Hours | Logbook as sub-tabs */
+    $subGroups = array('Accounting', 'MX');
+    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation', 'mxtime' => 'My Hours', 'mxlog' => 'Logbook');
     $gi = 0; $tabsH = ''; $bodyH = '';
     foreach ($groups as $gl => $gw) {
       $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">' . esc_html($gl) . '</button>';
