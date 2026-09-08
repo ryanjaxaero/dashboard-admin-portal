@@ -585,6 +585,15 @@ add_filter('post_password_required', function ($required, $post) {
   return $required;
 }, 10, 2);
 
+/* Ryan, Sep 8 2026: the page-password form WordPress prints for a protected page (the canvas
+   and the mapped pages carry one) gets the same show-password eye as the sign-in and settings
+   frames. The form is inline, so the wrapper stays inline there. */
+add_filter('the_password_form', function ($form) {
+  if (strpos($form, 'jaxauth-pweye') !== false) { return $form; }
+  return '<style>' . jaxauth_tokens_css() . jaxauth_pw_eye_css() . '.post-password-form .pwf{display:inline-block;vertical-align:middle}.post-password-form .pwf input{padding-right:40px}</style>'
+       . $form . '<script id="jaxauth-pweye">' . jaxauth_pw_eye_js() . '</script>';
+}, 20);
+
 /* Admin page + no-cache for signed-in views of gated pages. */
 add_action('template_redirect', function () {
   if (!is_page()) { return; }
@@ -1772,9 +1781,13 @@ function jaxauth_menu_footer() {
 .jaxmnu-btn span{display:block;width:18px;height:2px;background:var(--ink);position:relative}
 .jaxmnu-btn span:before,.jaxmnu-btn span:after{content:'';position:absolute;left:0;width:18px;height:2px;background:var(--ink)}
 .jaxmnu-btn span:before{top:-6px}.jaxmnu-btn span:after{top:6px}
-.jaxmnu-pane{position:fixed;top:60px;right:12px;z-index:99990;width:min(300px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-lg);box-shadow:var(--lift);display:none;overflow:hidden;font-family:<?php echo jaxauth_font_stack(); ?>}
+/* Ryan, Sep 8 2026: "Mobile hamburger menu does not scroll properly." The pane is position:fixed,
+   so page scrolling never moves it; with a dozen widget links it ran past the bottom of a phone
+   screen and the overflow:hidden clipped the rest. It now caps at the viewport (dvh where the
+   browser has it, so the iOS toolbar does not eat the last items) and scrolls inside itself. */
+.jaxmnu-pane{position:fixed;top:60px;right:12px;z-index:99990;width:min(300px,calc(100vw - 24px));max-height:calc(100vh - 72px);max-height:calc(100dvh - 72px);background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-lg);box-shadow:var(--lift);display:none;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;font-family:<?php echo jaxauth_font_stack(); ?>}
 .jaxmnu-pane.on{display:block}
-body.admin-bar .jaxmnu-btn{top:44px}body.admin-bar .jaxmnu-pane{top:92px}
+body.admin-bar .jaxmnu-btn{top:44px}body.admin-bar .jaxmnu-pane{top:92px;max-height:calc(100vh - 104px);max-height:calc(100dvh - 104px)}
 .jaxmnu-hd{padding:12px 16px 10px;border-bottom:1px solid var(--hair);font-weight:800 !important;color:var(--brand) !important;font-size:13px !important;letter-spacing:.14em !important;text-transform:uppercase !important;line-height:1.2 !important}
 .jaxmnu-pane a,.jaxmnu-pane button.jaxmnu-item{display:block !important;width:100% !important;min-width:0 !important;text-align:left !important;background:none !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;padding:11px 16px !important;font:inherit !important;font-size:13.5px !important;font-weight:400 !important;color:var(--ink) !important;text-decoration:none !important;letter-spacing:0 !important;text-transform:none !important;cursor:pointer}
 .jaxmnu-pane a:hover,.jaxmnu-pane button.jaxmnu-item:hover{background:var(--ground) !important;color:var(--ink) !important}
@@ -1868,6 +1881,36 @@ function jaxauth_iframe($html, $fid, $title) {
     . 'window.addEventListener("message",function(e){var d=e.data;if(d&&d.jaxauthH&&Math.abs(d.jaxauthH-last)>2){last=d.jaxauthH;var fl=0;try{fl=window.innerHeight-f.getBoundingClientRect().top-(window.pageYOffset||0)*0;fl=window.innerHeight-f.getBoundingClientRect().top;}catch(e2){}f.style.height=Math.max(d.jaxauthH+24,fl)+"px";}});})();</script>';
 }
 
+/* Ryan, Sep 8 2026: 'Add a "show password" eyeball button when people enter a password.' One
+   CSS block and one script, shared by the sign-in frame, the settings frame (current / new /
+   new again) and the page-password form WordPress prints for a protected page: every
+   input[type=password] is wrapped and gets an eye button that flips it to text and back.
+   The button is type=button, so Enter still submits the form it sits in. */
+function jaxauth_pw_eye_css() {
+  return '.pwf{position:relative;display:block}.pwf input{padding-right:46px}'
+       . '.pweye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;background:none;padding:0;margin:0;cursor:pointer;color:var(--ink2);display:flex;align-items:center;justify-content:center;border-radius:var(--r-sm);box-shadow:none}'
+       . '.pweye:hover{color:var(--ink)}.pweye svg{width:20px;height:20px;display:block}';
+}
+function jaxauth_pw_eye_js() {
+  $js = <<<'JS'
+(function(){
+  var EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/><path d="M3 3l18 18"/></svg>';
+  var ins=document.querySelectorAll('input[type="password"]');
+  for(var i=0;i<ins.length;i++){(function(inp){
+    if(inp.getAttribute('data-eye')==='1'){return;}
+    inp.setAttribute('data-eye','1');
+    var w=document.createElement('span');w.className='pwf';
+    inp.parentNode.insertBefore(w,inp);w.appendChild(inp);
+    var b=document.createElement('button');b.type='button';b.className='pweye';b.setAttribute('aria-label','Show password');b.setAttribute('aria-pressed','false');b.setAttribute('tabindex','-1');b.innerHTML=EYE;
+    b.addEventListener('click',function(){var show=inp.type==='password';inp.type=show?'text':'password';b.innerHTML=show?OFF:EYE;b.setAttribute('aria-label',show?'Hide password':'Show password');b.setAttribute('aria-pressed',show?'true':'false');inp.focus();});
+    w.appendChild(b);
+  })(ins[i]);}
+})();
+JS;
+  return $js;
+}
+
 function jaxauth_frame_head() {
   /* The shared head for the three srcdoc documents this snippet renders - the
      sign-in page, the user settings page and the Access admin. It opens with
@@ -1908,6 +1951,7 @@ function jaxauth_frame_head() {
     . '.fld{margin-bottom:13px}'
     . '.fld label{display:block;font-size:11.5px;font-weight:800;letter-spacing:.08em;color:var(--ink2);margin-bottom:5px;text-transform:uppercase}'
     . '.fld input,.fld select,.fld textarea{width:100%;border:1px solid var(--hair2);border-radius:var(--r-sm);padding:10px 12px;font:inherit;font-size:15px;color:var(--ink);background:var(--panel)}'
+    . jaxauth_pw_eye_css()
     . '.b1,.b2,.btn{display:inline-block;border-radius:var(--r-sm);padding:9px 16px;font:inherit;font-size:13.5px;font-weight:700;line-height:1.2;cursor:pointer;text-decoration:none}'
     . '.b1,.btn,.btn.red{background:var(--ink);color:#fff;border:1px solid var(--ink)}'
     . '.b1:hover,.btn:hover,.btn.red:hover{background:var(--ink-d);border-color:var(--ink-d);color:#fff}'
@@ -1957,7 +2001,8 @@ function jaxauth_frame_head() {
 }
 
 function jaxauth_frame_foot() {
-  return '<script>(function(){var l=0;function h(){var v=document.body.scrollHeight;var t=v;try{var fe=window.frameElement;if(fe){var pIH=(window.parent&&window.parent.innerHeight)||0;var top=fe.getBoundingClientRect().top+((window.parent&&window.parent.pageYOffset)||0);t=Math.max(v+24,pIH-Math.max(0,top));if(Math.abs(fe.getBoundingClientRect().height-t)>8){fe.style.height=t+"px";}}}catch(e){}if(Math.abs(v-l)>2){l=v;if(window.parent!==window){window.parent.postMessage({jaxauthH:v},"*");}}}h();setInterval(h,700);})();</script></body></html>';
+  /* Ryan, Sep 8 2026: the show-password eye runs in every frame document first */
+  return '<script>' . jaxauth_pw_eye_js() . '</script><script>(function(){var l=0;function h(){var v=document.body.scrollHeight;var t=v;try{var fe=window.frameElement;if(fe){var pIH=(window.parent&&window.parent.innerHeight)||0;var top=fe.getBoundingClientRect().top+((window.parent&&window.parent.pageYOffset)||0);t=Math.max(v+24,pIH-Math.max(0,top));if(Math.abs(fe.getBoundingClientRect().height-t)>8){fe.style.height=t+"px";}}}catch(e){}if(Math.abs(v-l)>2){l=v;if(window.parent!==window){window.parent.postMessage({jaxauthH:v},"*");}}}h();setInterval(h,700);})();</script></body></html>';
 }
 
 /* -------------------- [jaxaero_login] -------------------- */
