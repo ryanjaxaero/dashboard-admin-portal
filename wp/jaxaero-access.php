@@ -1636,7 +1636,8 @@ add_shortcode('jaxauth_user_canvas', function () {
          one inlined at first paint instead of arriving by a lazy fetch. The
          stored home key still wins inside the home group; an absent or unknown
          cookie inlines the first sub-panel, exactly as before. */
-      $subC = isset($_COOKIE['jaxSub-' . $gl]) ? sanitize_key((string) $_COOKIE['jaxSub-' . $gl]) : '';
+      /* Sep 7 2026 review: a view-as preview must neither read nor write the admin's own sub-tab memory */
+      $subC = (isset($_COOKIE['jaxSub-' . $gl]) && empty($GLOBALS['jaxauth_viewas_target'])) ? sanitize_key((string) $_COOKIE['jaxSub-' . $gl]) : '';
       if ($isSub) {
         /* Ryan, Sep 4 2026: the house accent - a gold rule with the sub-widget
            tabs directly underneath, the same rhythm as the Pay Portal header. */
@@ -1692,11 +1693,13 @@ add_shortcode('jaxauth_user_canvas', function () {
        deep link (menu pane, hashchange) selects the matching sub-panel; the
        stored home key wins at every load, the way the home tab does above.
        Block comments only, every statement terminated - same rules as srcdoc. */
-    $html .= '<script>(function(){var navs=document.querySelectorAll(".jaxsub");if(!navs.length){return;}var HK=' . wp_json_encode($homeK) . ';'
+    /* Sep 7 2026 review: the same PV guard as the tab script - a preview neither reads nor
+       writes the admin's own sub-tab memory (localStorage or cookie) */
+    $html .= '<script>(function(){var navs=document.querySelectorAll(".jaxsub");if(!navs.length){return;}var HK=' . wp_json_encode($homeK) . ';var PV=' . (!empty($GLOBALS['jaxauth_viewas_target']) ? 1 : 0) . ';'
       . 'function keyOf(h){return (h||"").replace("#jaxw-","");}'
       . 'function has(nav,k){if(!k){return false;}var ts=nav.querySelectorAll(".ptab");for(var i=0;i<ts.length;i++){if(ts[i].getAttribute("data-k")===k){return true;}}return false;}'
-      . 'function pick(nav,k,save){var ts=nav.querySelectorAll(".ptab");if(!has(nav,k)){k=ts.length?ts[0].getAttribute("data-k"):"";}for(var i=0;i<ts.length;i++){ts[i].classList.toggle("on",ts[i].getAttribute("data-k")===k);}var ps=nav.parentNode.querySelectorAll(".jaxsub-p");for(var j=0;j<ps.length;j++){ps[j].classList.toggle("on",ps[j].getAttribute("data-k")===k);}if(save){try{localStorage.setItem("jaxSub-"+nav.getAttribute("data-sg"),k);}catch(e){}try{document.cookie="jaxSub-"+nav.getAttribute("data-sg")+"="+k+";path=/;max-age=31536000;SameSite=Lax;Secure";}catch(e2){}}}'
-      . 'function initial(nav){var hk=keyOf(window.location.hash);if(has(nav,hk)){return hk;}if(has(nav,HK)){return HK;}var s="";try{s=localStorage.getItem("jaxSub-"+nav.getAttribute("data-sg"))||"";}catch(e){}return s;}'
+      . 'function pick(nav,k,save){var ts=nav.querySelectorAll(".ptab");if(!has(nav,k)){k=ts.length?ts[0].getAttribute("data-k"):"";}for(var i=0;i<ts.length;i++){ts[i].classList.toggle("on",ts[i].getAttribute("data-k")===k);}var ps=nav.parentNode.querySelectorAll(".jaxsub-p");for(var j=0;j<ps.length;j++){ps[j].classList.toggle("on",ps[j].getAttribute("data-k")===k);}if(save&&!PV){try{localStorage.setItem("jaxSub-"+nav.getAttribute("data-sg"),k);}catch(e){}try{document.cookie="jaxSub-"+nav.getAttribute("data-sg")+"="+k+";path=/;max-age=31536000;SameSite=Lax;Secure";}catch(e2){}}}'
+      . 'function initial(nav){var hk=keyOf(window.location.hash);if(has(nav,hk)){return hk;}if(has(nav,HK)){return HK;}var s="";if(!PV){try{s=localStorage.getItem("jaxSub-"+nav.getAttribute("data-sg"))||"";}catch(e){}}return s;}'
       . 'for(var n=0;n<navs.length;n++){(function(nav){pick(nav,initial(nav),false);nav.addEventListener("click",function(ev){var b=ev.target&&ev.target.closest?ev.target.closest(".ptab"):null;if(!b){return;}pick(nav,b.getAttribute("data-k"),true);});})(navs[n]);}'
       . 'window.addEventListener("hashchange",function(){var hk=keyOf(window.location.hash);for(var n=0;n<navs.length;n++){if(has(navs[n],hk)){pick(navs[n],hk,true);var el=document.getElementById("jaxw-"+hk);if(el){el.scrollIntoView();}}}});'
       . '})();</script>';
@@ -1793,6 +1796,13 @@ function jaxauth_menu_footer() {
 .jaxmnu-pane{position:fixed;top:60px;right:12px;z-index:99990;width:min(300px,calc(100vw - 24px));max-height:calc(100vh - 72px);max-height:calc(100dvh - 72px);background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-lg);box-shadow:var(--lift);display:none;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;font-family:<?php echo jaxauth_font_stack(); ?>}
 .jaxmnu-pane.on{display:block}
 body.admin-bar .jaxmnu-btn{top:44px}body.admin-bar .jaxmnu-pane{top:92px;max-height:calc(100vh - 104px);max-height:calc(100dvh - 104px)}
+<?php if (!empty($GLOBALS['jaxauth_viewas_target'])) { ?>
+/* Sep 7 2026 review: the view-as preview header is fixed to the top (130px on phones, 56px from
+   560px up - the same reserve jaxauth_viewas_banner gives the body), so the menu button and its
+   pane step down below it instead of disappearing behind it */
+.jaxmnu-btn{top:142px}.jaxmnu-pane{top:190px;max-height:calc(100vh - 202px);max-height:calc(100dvh - 202px)}
+@media(min-width:560px){.jaxmnu-btn{top:68px}.jaxmnu-pane{top:116px;max-height:calc(100vh - 128px);max-height:calc(100dvh - 128px)}}
+<?php } ?>
 .jaxmnu-hd{padding:12px 16px 10px;border-bottom:1px solid var(--hair);font-weight:800 !important;color:var(--brand) !important;font-size:13px !important;letter-spacing:.14em !important;text-transform:uppercase !important;line-height:1.2 !important}
 .jaxmnu-pane a,.jaxmnu-pane button.jaxmnu-item{display:block !important;width:100% !important;min-width:0 !important;text-align:left !important;background:none !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;padding:11px 16px !important;font:inherit !important;font-size:13.5px !important;font-weight:400 !important;color:var(--ink) !important;text-decoration:none !important;letter-spacing:0 !important;text-transform:none !important;cursor:pointer}
 .jaxmnu-pane a:hover,.jaxmnu-pane button.jaxmnu-item:hover{background:var(--ground) !important;color:var(--ink) !important}
