@@ -594,6 +594,11 @@ add_filter('the_password_form', function ($form) {
        . $form . '<script id="jaxauth-pweye">' . jaxauth_pw_eye_js() . '</script>';
 }, 20);
 
+/* Ryan, Sep 8 2026: "set the temp password expiration for three days instead of 24 hours" - the
+   set-password / reset links WordPress mints (the go-live emails, Reset it by email) were good
+   for one day and most instructors opened theirs too late. Three days now. */
+add_filter('password_reset_expiration', function () { return 3 * DAY_IN_SECONDS; });
+
 /* Admin page + no-cache for signed-in views of gated pages. */
 add_action('template_redirect', function () {
   if (!is_page()) { return; }
