@@ -1750,6 +1750,55 @@ add_shortcode('jaxauth_user_canvas', function () {
  * A hamburger on every front-end page for signed-in portal users: their
  * pages, the admin panel for admins, change password, request help, sign
  * out. Anonymous visitors and non-portal users never see it. */
+/* Ryan, Sep 9 2026, from a phone screenshot: "Remove the Instagram pop up at the bottom of
+   Wordpress." That card is Smash Balloon's critical-issue notice (Instagram Feed Pro 6.9.0).
+   The plugin STAYS and the notice is not a bug: the feed is genuinely used on the Home page and
+   the Thank You page, it is genuinely broken, and only signed-in admins ever see the warning.
+   What is wrong is where it shows up - it floats over the JAXAERO dashboard pages, which carry
+   no Instagram feed at all, and on a phone it lands on top of the content.
+   So it is suppressed on OUR pages only (the ones in jaxauth_pages plus the canvas and admin
+   pages) and left alone everywhere else, so it keeps nagging on the marketing pages where the
+   broken feed actually lives.
+   Two belts: a CSS rule for the class and id shapes Smash Balloon uses, and - because the exact
+   markup of that card could not be inspected from here without signing in - a one-pass sweep
+   that removes any floating element announcing itself as an Instagram Feed notice. The sweep
+   runs once on load and once more after 1.5s, since the plugin injects the card late. */
+function jaxauth_on_dash_page() {
+  if (is_admin()) { return false; }
+  $id = (int) get_queried_object_id();
+  if ($id <= 0) { return false; }
+  $pages = get_option('jaxauth_pages', array());
+  if (is_array($pages) && array_key_exists($id, $pages)) { return true; }
+  return $id === (int) get_option('jaxauth_canvas_page') || $id === (int) get_option('jaxauth_admin_page');
+}
+add_action('wp_footer', 'jaxauth_hide_feed_notice', 99);
+function jaxauth_hide_feed_notice() {
+  static $done = false;
+  if ($done || !jaxauth_on_dash_page()) { return; }
+  $done = true;
+  $amp = chr(38);
+  echo '<style id="jaxauth-no-sb">'
+     . '[class*="sbi"][class*="notice"],[id*="sbi"][id*="notice"],'
+     . '[class*="sb-notice"],[id*="sb-notice"],[class*="sb_notice"],[id*="sb_notice"],'
+     . '.sbi_frontend_notice,.sbi-frontend-license-notice{display:none !important}'
+     . '</style>';
+  echo '<script id="jaxauth-no-sb-js">(function(){'
+     . 'function sweep(){'
+     . 'var all=document.body?document.body.querySelectorAll("div,section,aside"):[];'
+     . 'for(var i=0;i<all.length;i++){var e=all[i];'
+     . 'if(e.childElementCount>6){continue;}'
+     . 'var t=(e.textContent||"");'
+     . 'if(t.length>260){continue;}'
+     . 'if(!/Instagram Feed/i.test(t)){continue;}'
+     . 'if(!/Critical Issue|preventing your Instagram|Resolve this issue/i.test(t)){continue;}'
+     . 'var p=getComputedStyle(e).position;'
+     . 'if(p!=="fixed"' . $amp . $amp . 'p!=="absolute"' . $amp . $amp . 'p!=="sticky"){continue;}'
+     . 'e.style.setProperty("display","none","important");}'
+     . '}'
+     . 'try{sweep();}catch(e){}'
+     . 'setTimeout(function(){try{sweep();}catch(e){}},1500);'
+     . '})();</script>';
+}
 add_action('wp_footer', 'jaxauth_menu_footer');
 function jaxauth_menu_footer() {
   static $done = false;
@@ -2256,13 +2305,12 @@ function jaxauth_admin_html() {
            its own tab of the IT widget. */ ?>
   <div class="mod" style="margin:0 0 14px">
     <span class="cardh">IT</span>
-    <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-top:4px">
+    <?php /* Ryan, Sep 9 2026: "remove the descriptors ... that live around the buttons for
+             those" - the two entries are self-describing, and on a phone the sentences pushed
+             the second button most of a screen below the first. */ ?>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
       <a class="b2" href="<?php echo esc_url($itUrl); ?>" target="_top">IT Status</a>
-      <span class="small" style="flex:1 1 240px">How every tool, server and job behind the dashboard is doing, checked every five minutes.</span>
-    </div>
-    <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-top:8px">
       <a class="b2" href="<?php echo esc_url($itUrl . '#infrastructure'); ?>" target="_top">IT Infrastructure</a>
-      <span class="small" style="flex:1 1 240px">What the dashboard is made of - the code, the screens, the web addresses, the background jobs, where the data lives and who can get in. Read from the running site.</span>
     </div>
   </div>
   <div class="grid2">
