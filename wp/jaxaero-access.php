@@ -143,7 +143,8 @@ function jaxauth_shortcode_map() {
     'jaxaero_mx_pay'         => 'mxtime',
     /* Ryan, Sep 7 2026: the aircraft logbooks (snippet 23) live in the MX area on the same toggle */
     'jaxaero_mx_logbook'     => 'mxtime',
-    /* Ryan, Sep 7 2026: the MX Briefing (snippet 24) - the maintenance team's Safety page */
+    /* Ryan, Sep 7 2026: the MX Overview (snippet 24, shipped as MX Briefing) - the maintenance
+       team's Safety page */
     'jaxaero_mx_briefing'    => 'mxtime',
     'jaxaero_sales_marketing' => 'sm',
     'jaxaero_tax'            => 'tax',
@@ -1285,10 +1286,10 @@ function jaxauth_canvas_widgets($u) {
     /* Sep 4 2026 review (SEC-3): 'depr_view' is the same register read-only;
        a person holding both keys gets ONE Depreciation tab, the writing one. */
     if ($w[0] === 'depr_view' && in_array('depr', $cvsG, true)) { continue; }
-    /* Ryan, Sep 7 2026: the MX Briefing leads the MX widgets - it becomes a bound mechanic's
+    /* Ryan, Sep 7 2026: the MX Overview leads the MX widgets - it becomes a bound mechanic's
        landing tab (like Safety for instructors) and sits ahead of My Hours in the menu */
     if ($w[0] === 'mxtime' && in_array('mxtime', $cvsG, true) && shortcode_exists('jaxaero_mx_briefing')) {
-      $out[] = array('key' => 'mxbrief', 'tag' => '[jaxaero_mx_briefing]', 'label' => 'MX Briefing');
+      $out[] = array('key' => 'mxbrief', 'tag' => '[jaxaero_mx_briefing]', 'label' => 'MX Overview');
     }
     if (in_array($w[0], $cvsG, true)) { $out[] = array('key' => $w[0], 'tag' => $w[1], 'label' => $w[2]); }
     /* Ryan, Sep 7 2026: "MX users should be My hours and My pay." A person BOUND to a
@@ -1484,7 +1485,7 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* a bound mechanic gets the briefing as its own landing tab (Ryan, Sep 7 2026: "similar
      to the Safety page"); editors keep it as the first sub-tab of the MX department so no
      saved tab index moves for them */
-  if ($cvsMech) { $gmap['mxtime'] = 'My Hours'; $gmap['mxlog'] = 'Logbook'; $gmap['mxbrief'] = 'MX Briefing'; }
+  if ($cvsMech) { $gmap['mxtime'] = 'My Hours'; $gmap['mxlog'] = 'Logbook'; $gmap['mxbrief'] = 'MX Overview'; }
   /* Ben, Sep 2 (punch list 13B): Log Detailing leads so Sam's canvas opens on
      it with My Pay as the next tab. Safety now precedes My Pay and My Hours
      follows it, so an instructor's tabs read Safety / My Pay / My Hours. Nobody
@@ -1495,9 +1496,9 @@ add_shortcode('jaxauth_user_canvas', function () {
      no existing user's group index moves (nobody holds 'lessor' yet). */
   /* 'Logbook' (a bound mechanic's third tab) sits right after 'My Hours' so the
      reorder below yields My Hours / My Pay / Logbook; nobody held it before Sep 7 2026. */
-  /* 'MX Briefing' sits right after 'Safety' and ahead of My Hours / Logbook, so a mechanic
+  /* 'MX Overview' sits right after 'Safety' and ahead of My Hours / Logbook, so a mechanic
      lands on the briefing (Ryan, Sep 7 2026: "similar to the Safety page for instructors") */
-  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'MX Briefing', 'My Pay', 'My Hours', 'Logbook', 'Sales & Marketing', 'MX', 'Documents', 'Lease statements');
+  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'MX Overview', 'My Pay', 'My Hours', 'Logbook', 'Sales & Marketing', 'MX', 'Documents', 'Lease statements');
   $groups = array();
   foreach ($gorder as $gl) { $groups[$gl] = array(); }
   foreach ($tags as $t) { $gl = isset($gmap[$t['key']]) ? $gmap[$t['key']] : 'Documents'; $groups[$gl][] = $t; }
@@ -1588,7 +1589,7 @@ add_shortcode('jaxauth_user_canvas', function () {
        an instructor canvas - the only kind carrying BOTH a Safety bubble and the
        binding-driven instructor My Hours key, never a contractor, never an editor - gets
        Safety as a derived home unless one is stored. The same rule pins a bound mechanic
-       to the MX Briefing (Ryan, Sep 7: "landing tab for mechanics"). $gorder is untouched,
+       to the MX Overview (Ryan, Sep 7: "landing tab for mechanics"). $gorder is untouched,
        so nobody's saved index moves; a #jaxw- deep link still wins for that one load.
        Shapes, decided before branching: an INSTRUCTOR canvas (Safety + the 'myhours' key)
        wins over the mechanic rule, so Chandara - instructor and bound mechanic - lands on
@@ -1601,7 +1602,7 @@ add_shortcode('jaxauth_user_canvas', function () {
       if (isset($groups['Safety'], $groups['My Hours'])) {
         foreach ($groups['My Hours'] as $cvsHx) { if ($cvsHx['key'] === 'myhours') { $cvsInstr = true; break; } }
       }
-      $cvsMechOnly = !empty($cvsMech) && isset($groups['MX Briefing']) && !isset($groups['Accounting']) && !isset($groups['Payroll']) && !isset($groups['Airplanes']);
+      $cvsMechOnly = !empty($cvsMech) && isset($groups['MX Overview']) && !isset($groups['Accounting']) && !isset($groups['Payroll']) && !isset($groups['Airplanes']);
       if ($cvsInstr) { $homeK = 'safety'; }
       elseif ($cvsMechOnly) { $homeK = 'mxbrief'; }
     }
@@ -1623,7 +1624,7 @@ add_shortcode('jaxauth_user_canvas', function () {
        whole queue, visible or not. A group with a single widget gets no strip. */
     /* Ryan, Sep 7 2026: the MX bubble is a department too - My Hours | Logbook as sub-tabs */
     $subGroups = array('Accounting', 'MX');
-    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation', 'mxbrief' => 'Briefing', 'mxtime' => 'My Hours', 'mxlog' => 'Logbook');
+    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation', 'mxbrief' => 'Overview', 'mxtime' => 'My Hours', 'mxlog' => 'Logbook');
     $gi = 0; $tabsH = ''; $bodyH = '';
     foreach ($groups as $gl => $gw) {
       $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">' . esc_html($gl) . '</button>';
