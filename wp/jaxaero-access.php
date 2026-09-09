@@ -92,9 +92,9 @@ if (!defined('JAXAUTH_LOCK_SECS')) { define('JAXAUTH_LOCK_SECS', 900); }
 function jaxauth_registry() {
   return [
     'auto'      => ['Revenue - AUTO', 'auto-refreshed dashboard'],
-    'pay'       => ['Payroll widget', 'the Pay Portal - instructors, contractors, salaried, MX'],
-    'pay.rates' => ['Rate editor', 'pay rates page'],
-    'bonus'     => ['Bonus & review editor', 'add checkride passes + review mentions'],
+    'pay'       => ['Payroll Widget', 'the Pay Portal - instructors, contractors, salaried, MX'],
+    'pay.rates' => ['Rate Editor', 'pay rates page'],
+    'bonus'     => ['Bonus & Review Editor', 'add checkride passes + review mentions'],
     'sales'     => ['Sales', 'pipeline, enrollment tracking and commissions'],
     'marketing' => ['Marketing', 'Meta Ads + ad campaigns'],
     'safety'    => ['Safety', 'company-wide FOQA safety data'],
@@ -109,21 +109,21 @@ function jaxauth_registry() {
        techs should not be able to do anything other than clock in and clock out."
        This is that toggle. It adds the Edit hours tab inside My Hours (MX); a tech
        without it sees the clock alone and asks a manager to fix a mistake. */
-    'mxedit'    => ['Edit MX hours', 'add or fix hours for every mechanic by pay period - the maintenance manager'],
-    'tax'       => ['Sales tax', 'aircraft sales tax page'],
+    'mxedit'    => ['Edit MX Hours', 'add or fix hours for every mechanic by pay period - the maintenance manager'],
+    'tax'       => ['Sales Tax', 'aircraft sales tax page'],
     'lease'     => ['Leases', 'lease management - VR Leasing aircraft'],
     'depr'      => ['Depreciation', 'fixed assets - book and tax depreciation'],
     /* Sep 4 2026 review (SEC-3): the read-only tier the depreciation snippet's
        jaxdep_can_read already honours - an outside reader (Vargo) gets this,
        never 'depr', so nobody is handed event-writing rights to read. */
-    'depr_view' => ['Depreciation (view only)', 'fixed assets - read the register, schedule and documents'],
+    'depr_view' => ['Depreciation (View Only)', 'fixed assets - read the register, schedule and documents'],
     'docs'      => ['Documents', 'archive & search'],
-    'expense'   => ['Add expenses', 'enter expenses on the owner P/L'],
-    'ownerstmt' => ['Aircraft owner statements', 'staff view - every plane P/L'],
+    'expense'   => ['Add Expenses', 'enter expenses on the owner P/L'],
+    'ownerstmt' => ['Aircraft Owner Statements', 'staff view - every plane P/L'],
     'owner'     => ['My Aircraft', 'your aircraft statements (owners)'],
-    'lessor'    => ['Lessor portal', 'VR Leasing read-only statements'],
-    'invoice'   => ['Own pay dashboard', 'only the bound person - instructor or 1099 contractor'],
-    'access'    => ['Access admin', 'this admin panel'],
+    'lessor'    => ['Lessor Portal', 'VR Leasing read-only statements'],
+    'invoice'   => ['Own Pay Dashboard', 'only the bound person - instructor or 1099 contractor'],
+    'access'    => ['Access Admin', 'this admin panel'],
     /* Ryan, Sep 3 2026: the IT status page (snippet 20) is deliberately NOT a grantable
        widget or canvas tab - only dashboard admins reach it, via the Access admin button. */
   ];
@@ -1264,14 +1264,14 @@ function jaxauth_canvas_widgets($u) {
        hamburger-menu text and the canvas tab text. The department bubble the
        widget sits in stays 'MX' ($gmap / $gorder below), like Accounting. */
     array('mxtime', '[jaxaero_mx_time]', 'My Hours'),
-    /* Ryan, Sep 6 2026 design audit: sentence case, matching the registry label */
-    array('ownerstmt', '[jaxaero_aircraft_owner]', 'Aircraft owner statements'),
+    /* Ryan, Sep 9 2026 (Ben, punch list 15): headings are title case, matching the registry label */
+    array('ownerstmt', '[jaxaero_aircraft_owner]', 'Aircraft Owner Statements'),
     array('owner', '[jaxaero_owner_portal]', 'My Aircraft'),
-    array('lessor', '[jaxaero_lessor]', 'Lease statements'),
+    array('lessor', '[jaxaero_lessor]', 'Lease Statements'),
     array('sales', '[jaxaero_sales_pipeline]', 'Sales'),
     array('marketing', '[jaxaero_marketing]', 'Marketing'),
-    /* Ryan, Sep 6 2026 design audit: sentence case, matching the Accounting sub-label */
-    array('tax', '[jaxaero_tax]', 'Sales tax'),
+    /* Ryan, Sep 9 2026 (Ben, punch list 15): headings are title case, matching the Accounting sub-label */
+    array('tax', '[jaxaero_tax]', 'Sales Tax'),
     array('lease', '[jaxaero_leases]', 'Leases'),
     array('depr', '[jaxaero_depreciation]', 'Depreciation'),
     array('depr_view', '[jaxaero_depreciation]', 'Depreciation'),
@@ -1469,7 +1469,7 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* Ryan, Sep 4 2026 (lease): the Revenue bubble is now the Accounting
      department (Revenue / Sales tax / Leases / Depreciation as a sub-menu, see $subGroups
      below); the lessor's statements are their own bubble. */
-  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease statements', 'mxpay' => 'My Pay', 'mxlog' => 'MX', 'mxbrief' => 'MX');
+  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease Statements', 'mxpay' => 'My Pay', 'mxlog' => 'MX', 'mxbrief' => 'MX');
   /* Ryan, Sep 7 2026: "MX users should be My hours and My pay ... model the user
      experience for MX users after that of 1099 contractors (with regard to
      navigation)." A contractor's canvas is work area first, then My Pay, as plain
@@ -1498,7 +1498,7 @@ add_shortcode('jaxauth_user_canvas', function () {
      reorder below yields My Hours / My Pay / Logbook; nobody held it before Sep 7 2026. */
   /* 'MX Overview' sits right after 'Safety' and ahead of My Hours / Logbook, so a mechanic
      lands on the briefing (Ryan, Sep 7 2026: "similar to the Safety page for instructors") */
-  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'MX Overview', 'My Pay', 'My Hours', 'Logbook', 'Sales & Marketing', 'MX', 'Documents', 'Lease statements');
+  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'MX Overview', 'My Pay', 'My Hours', 'Logbook', 'Sales & Marketing', 'MX', 'Documents', 'Lease Statements');
   $groups = array();
   foreach ($gorder as $gl) { $groups[$gl] = array(); }
   foreach ($tags as $t) { $gl = isset($gmap[$t['key']]) ? $gmap[$t['key']] : 'Documents'; $groups[$gl][] = $t; }
@@ -1624,7 +1624,7 @@ add_shortcode('jaxauth_user_canvas', function () {
        whole queue, visible or not. A group with a single widget gets no strip. */
     /* Ryan, Sep 7 2026: the MX bubble is a department too - My Hours | Logbook as sub-tabs */
     $subGroups = array('Accounting', 'MX');
-    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation', 'mxbrief' => 'Overview', 'mxtime' => 'My Hours', 'mxlog' => 'Logbook');
+    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales Tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation', 'mxbrief' => 'Overview', 'mxtime' => 'My Hours', 'mxlog' => 'Logbook');
     $gi = 0; $tabsH = ''; $bodyH = '';
     foreach ($groups as $gl => $gw) {
       $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">' . esc_html($gl) . '</button>';
@@ -1830,7 +1830,7 @@ body.admin-bar .jaxmnu-btn{top:44px}body.admin-bar .jaxmnu-pane{top:92px;max-hei
   </div>
   <div class="jaxmnu-note" id="jaxmnuNote" style="display:none"></div>
   <?php /* Ryan, Sep 6 2026 design audit: the menu item carries the name of the page it opens */ ?>
-  <?php if ($adminUrl !== '') { ?><div class="jaxmnu-sep"></div><a href="<?php echo esc_url($adminUrl); ?>">Access admin</a><?php } ?>
+  <?php if ($adminUrl !== '') { ?><div class="jaxmnu-sep"></div><a href="<?php echo esc_url($adminUrl); ?>">Access Admin</a><?php } ?>
   <div class="jaxmnu-sep"></div>
   <?php /* Ryan, Sep 6 2026 design audit: one name for the action, same as the settings page */ ?>
   <button type="button" class="jaxmnu-item" id="jaxmnuOut">Sign out</button>
@@ -2042,7 +2042,7 @@ function jaxauth_login_html() {
   <?php /* Ryan, Sep 6 2026 design audit: left-aligned like every other header; the doc has no centered variant */ ?>
   <div class="hd">
     <?php if (empty($GLOBALS['jaxauth_canvas_render'])): ?><span class="brand">JAXAERO</span><?php endif; ?>
-    <h1>Sign in to your dashboard</h1>
+    <h1>Sign In to Your Dashboard</h1>
     <div class="sub">Your dashboards, pay and documents in one place.</div>
   </div>
   <div class="mod">
@@ -2103,7 +2103,7 @@ function jaxauth_home_html($u) {
   <div style="margin:0 0 14px"><button class="b2" id="out">Sign out</button></div>
   <?php if ($must) { ?><div class="note"><b>Please choose a new password now.</b> The one you signed in with was temporary.</div><?php } ?>
   <div class="mod" id="chpw" style="max-width:430px">
-    <b>Change your password</b>
+    <b>Change Your Password</b>
     <div class="small" style="margin-bottom:10px">At least <?php echo (int) JAXAUTH_MIN_PW; ?> characters. Takes effect immediately.</div>
     <div class="err" id="perr"></div><div class="okmsg" id="pok">Password changed.</div>
     <div class="fld"><label for="cur">Current password</label><input id="cur" type="password" autocomplete="current-password"></div>
@@ -2112,7 +2112,7 @@ function jaxauth_home_html($u) {
     <button class="b1" id="pgo">Change password</button>
   </div>
   <div class="mod" id="helpmod" style="max-width:430px">
-    <b>Request help</b>
+    <b>Request Help</b>
     <div class="small" style="margin-bottom:10px">Describe the problem - this goes straight to Ryan by email.</div>
     <div class="err" id="herr"></div><div class="okmsg" id="hok">Sent - Ryan has it in his inbox.</div>
     <div class="fld"><textarea id="htxt" rows="4" style="font-size:13.5px;padding:8px 10px" placeholder="What is going wrong?"></textarea></div>
@@ -2247,7 +2247,7 @@ function jaxauth_admin_html() {
 <div class="wrap">
   <div class="hd">
     <?php if (empty($GLOBALS['jaxauth_canvas_render'])): ?><span class="brand">JAXAERO</span><?php endif; ?>
-    <h1>Access admin</h1>
+    <h1>Access Admin</h1>
     <div class="sub">Pick a person, flip toggles, save. Changes apply on their next page load. Every save is logged below.</div>
   </div>
   <?php /* Ryan, Sep 6 2026 design audit: no inline font-size or padding on buttons - .b1/.b2 render at the 13.5px / 9px 16px spec */ ?>
@@ -2280,7 +2280,7 @@ function jaxauth_admin_html() {
     </div>
   </div>
   <div class="mod" id="fqamod">
-    <b>FOQA safety deck</b>
+    <b>FOQA Safety Deck</b>
     <div class="small" style="margin-bottom:8px">Drop Kasen's monthly .pptx to update the instructor safety panel. Parsed and shown to you before anything is saved. <span id="fqamonths"></span></div>
     <div id="fqaZone" style="border:2px dashed var(--hair2);border-radius:var(--r-md);background:var(--tint);padding:14px;text-align:center;cursor:pointer;font-size:13px">
       <b>Drop the .pptx here</b> <span style="color:var(--ink2)">or click to choose</span>
@@ -2290,7 +2290,7 @@ function jaxauth_admin_html() {
     <div id="fqaOut" class="small" style="margin-top:6px;display:none"></div>
   </div>
   <div class="mod">
-    <b>Anthropic API key &mdash; key only</b>
+    <b>Anthropic API Key &mdash; Key Only</b>
     <div class="small" style="margin-bottom:8px">This box takes ONLY the Anthropic API key that powers invoice reading. It is not a place to upload documents. Stored server-side and never shown again after saving. Status: <span id="aist"><?php echo esc_html($aiSet); ?></span></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <input type="password" id="aikey" placeholder="sk-ant-..." autocomplete="off" style="flex:1;min-width:220px;font:inherit;padding:10px 12px;border:1px solid var(--hair2);border-radius:var(--r-sm);color:var(--ink);background:var(--panel)">
@@ -2301,7 +2301,7 @@ function jaxauth_admin_html() {
   </div>
   <div id="pwov" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:99;align-items:flex-start;justify-content:center;padding:96px 16px 16px">
     <div style="background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-lg);padding:22px;max-width:430px;width:100%;box-shadow:var(--lift)">
-      <b id="pwtitle" class="cardh">Temporary password</b>
+      <b id="pwtitle" class="cardh">Temporary Password</b>
       <div class="small" style="margin:6px 0 10px">Shown once. Hand it over out of band - the site never emails it. A new password is required at first sign-in.</div>
       <div style="display:flex;gap:8px">
         <input id="pwval" readonly autocomplete="off" style="flex:1;font-family:Consolas,Menlo,monospace;font-size:15px;padding:10px 12px;border:1px solid var(--hair2);border-radius:var(--r-sm);color:var(--ink);background:var(--panel)">
@@ -2312,7 +2312,7 @@ function jaxauth_admin_html() {
     </div>
   </div>
   <div class="mod">
-    <b>Audit log</b>
+    <b>Audit Log</b>
     <div class="small" style="margin-bottom:6px">Append-only. Nothing here can be deleted.</div>
     <div id="alog"></div>
   </div>
@@ -2476,7 +2476,7 @@ function jaxauth_admin_html() {
   }
   function renderAll(){renderUsers();renderDetail();renderLog();}
   var pwov=document.getElementById('pwov');
-  function showTempPw(who,pw){document.getElementById('pwtitle').textContent='Temporary password for '+who;var v=document.getElementById('pwval');v.value=pw;document.getElementById('pwcopied').style.display='none';pwov.style.display='flex';v.focus();v.select();}
+  function showTempPw(who,pw){document.getElementById('pwtitle').textContent='Temporary Password for '+who;var v=document.getElementById('pwval');v.value=pw;document.getElementById('pwcopied').style.display='none';pwov.style.display='flex';v.focus();v.select();}
   document.getElementById('pwclose').addEventListener('click',function(){document.getElementById('pwval').value='';pwov.style.display='none';});
   document.getElementById('pwval').addEventListener('click',function(){this.select();});
   document.getElementById('pwcopy').addEventListener('click',function(){
