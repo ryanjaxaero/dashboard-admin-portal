@@ -2251,7 +2251,20 @@ function jaxauth_admin_html() {
     <div class="sub">Pick a person, flip toggles, save. Changes apply on their next page load. Every save is logged below.</div>
   </div>
   <?php /* Ryan, Sep 6 2026 design audit: no inline font-size or padding on buttons - .b1/.b2 render at the 13.5px / 9px 16px spec */ ?>
-  <div style="display:flex;gap:10px;align-items:center;margin:0 0 14px;flex-wrap:wrap"><a class="b2" href="<?php echo esc_url($itUrl); ?>" target="_top">IT status</a><span class="small">How every tool, server and job behind the dashboard is doing.</span></div>
+  <?php /* Ryan, Sep 9 2026: "Make the IT infrastructure tool a submenu item in an IT status
+           section that lives in the admin dashboard." One IT section, two entries, each opening
+           its own tab of the IT widget. */ ?>
+  <div class="mod" style="margin:0 0 14px">
+    <span class="cardh">IT</span>
+    <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-top:4px">
+      <a class="b2" href="<?php echo esc_url($itUrl); ?>" target="_top">IT Status</a>
+      <span class="small" style="flex:1 1 240px">How every tool, server and job behind the dashboard is doing, checked every five minutes.</span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-top:8px">
+      <a class="b2" href="<?php echo esc_url($itUrl . '#infrastructure'); ?>" target="_top">IT Infrastructure</a>
+      <span class="small" style="flex:1 1 240px">What the dashboard is made of - the code, the screens, the web addresses, the background jobs, where the data lives and who can get in. Read from the running site.</span>
+    </div>
+  </div>
   <div class="grid2">
     <div class="mod ulist">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
