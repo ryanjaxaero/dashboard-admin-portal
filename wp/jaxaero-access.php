@@ -1284,6 +1284,11 @@ function jaxauth_rest_reset_pw(WP_REST_Request $req) {
  * you have, not a list of what you lack. Order: the money dashboards first,
  * then statements, then the person's own pay page, then tools. */
 function jaxauth_canvas_widgets($u) {
+  /* Sep 10 2026 (D18/D19): a person bound to a front-desk roster entry is on the clock but is
+     not a mechanic - no MX Overview, no mechanic shape, and beside an instructor's own My Hours
+     their clock tab reads Admin Hours. jaxmx_dept lives in snippet 18; absent means mechanic. */
+  $cvsSlug0 = (string) get_user_meta($u->ID, 'jaxmx_mechanic', true);
+  $cvsAdminDept = ($cvsSlug0 !== '' && function_exists('jaxmx_dept') && jaxmx_dept($cvsSlug0) === 'admin');
   /* each entry: key (anchor id + grant), tag (shortcode), label (menu text) */
   $out = array();
   $order = array(
@@ -1326,7 +1331,7 @@ function jaxauth_canvas_widgets($u) {
     if ($w[0] === 'depr_view' && in_array('depr', $cvsG, true)) { continue; }
     /* Ryan, Sep 7 2026: the MX Overview leads the MX widgets - it becomes a bound mechanic's
        landing tab (like Safety for instructors) and sits ahead of My Hours in the menu */
-    if ($w[0] === 'mxtime' && in_array('mxtime', $cvsG, true) && shortcode_exists('jaxaero_mx_briefing')) {
+    if ($w[0] === 'mxtime' && in_array('mxtime', $cvsG, true) && shortcode_exists('jaxaero_mx_briefing') && !$cvsAdminDept) {
       $out[] = array('key' => 'mxbrief', 'tag' => '[jaxaero_mx_briefing]', 'label' => 'MX Overview');
     }
     if (in_array($w[0], $cvsG, true)) { $out[] = array('key' => $w[0], 'tag' => $w[1], 'label' => $w[2]); }
@@ -1392,7 +1397,7 @@ function jaxauth_canvas_widgets($u) {
      only mxtime, keep the plain label Ben asked for. */
   $cvsKeys = array_map(function ($x) { return $x['key']; }, $out);
   if (in_array('mxtime', $cvsKeys, true) && in_array('myhours', $cvsKeys, true)) {
-    foreach ($out as $cvsI => $cvsW) { if ($cvsW['key'] === 'mxtime') { $out[$cvsI]['label'] = 'My Hours (MX)'; } }
+    foreach ($out as $cvsI => $cvsW) { if ($cvsW['key'] === 'mxtime') { $out[$cvsI]['label'] = $cvsAdminDept ? 'Admin Hours' : 'My Hours (MX)'; } }
   }
   return $out;
 }
@@ -1528,12 +1533,13 @@ add_shortcode('jaxauth_user_canvas', function () {
      jaxmx_mechanic) now that My Pay is no longer listed for them */
   $cvsHasMx = false;
   foreach ($tags as $cvsT) { if ($cvsT['key'] === 'mxtime') { $cvsHasMx = true; break; } }
-  $cvsMech = $cvsHasMx && (string) get_user_meta($u->ID, 'jaxmx_mechanic', true) !== '';
+  $cvsMech = $cvsHasMx && $cvsSlug0 !== '' && !$cvsAdminDept;
   /* a bound mechanic's logbooks are their own Logbook tab after My Pay (Sep 7 2026) */
   /* a bound mechanic gets the briefing as its own landing tab (Ryan, Sep 7 2026: "similar
      to the Safety page"); editors keep it as the first sub-tab of the MX department so no
      saved tab index moves for them */
   if ($cvsMech) { $gmap['mxtime'] = 'My Hours'; $gmap['mxlog'] = 'Logbook'; $gmap['mxbrief'] = 'MX Overview'; }
+  if ($cvsAdminDept) { $gmap['mxtime'] = 'My Hours'; }
   /* Ben, Sep 2 (punch list 13B): Log Detailing leads so Sam's canvas opens on
      it with My Pay as the next tab. Safety now precedes My Pay and My Hours
      follows it, so an instructor's tabs read Safety / My Pay / My Hours. Nobody
