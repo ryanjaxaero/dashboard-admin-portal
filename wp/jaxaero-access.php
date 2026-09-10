@@ -106,6 +106,11 @@ function jaxauth_registry() {
        also asked to "Remove the Pay column entirely", so the blurb no longer
        promises pay here. */
     'mxtime'    => ['My Hours (MX)', 'mechanic clock in/out and hours by pay period'],
+    /* Ryan, Sep 10 2026: "Create a separate widget called 'My Hours (Admin)' and keep the
+       'My Hours (MX)' separate in case we want to build them slightly differently." Same clock
+       engine, its own widget and its own toggle - front-desk staff never get the MX Overview,
+       the Logbook or the mechanic landing that ride along with mxtime. */
+    'admintime' => ['My Hours (Admin)', 'front-desk clock in/out for time on property, hours by pay period'],
     /* Ryan, Sep 7 2026: "I want edit hours, especially for the MX department, to be a
        toggle that we can turn on for Bruce, the maintenance manager. Non-manager MX
        techs should not be able to do anything other than clock in and clock out."
@@ -159,6 +164,7 @@ function jaxauth_shortcode_map() {
     'jaxaero_marketing'      => 'marketing',
     'jaxaero_safety'         => 'safety',
     'jaxaero_mx_time'        => 'mxtime',
+    'jaxaero_admin_time'     => 'admintime',
     /* Ryan, Sep 7 2026: a mechanic's own pay page rides on the same My Hours toggle */
     'jaxaero_mx_pay'         => 'mxtime',
     /* Ryan, Sep 7 2026: the aircraft logbooks (snippet 23) live in the MX area on the same toggle */
@@ -1288,7 +1294,13 @@ function jaxauth_canvas_widgets($u) {
      not a mechanic - no MX Overview, no mechanic shape, and beside an instructor's own My Hours
      their clock tab reads Admin Hours. jaxmx_dept lives in snippet 18; absent means mechanic. */
   $cvsSlug0 = (string) get_user_meta($u->ID, 'jaxmx_mechanic', true);
-  $cvsAdminDept = ($cvsSlug0 !== '' && function_exists('jaxmx_dept') && jaxmx_dept($cvsSlug0) === 'admin');
+  /* Sep 10 2026: the widgets are separately grantable now, so the GRANT decides which clock page
+     a person gets. The roster department still decides the shop-only views and who they are told
+     to ask for a fix; holding admintime without mxtime means the front desk either way. */
+  $cvsGrants0 = jaxauth_grants($u->ID);
+  $cvsAdminOnly = in_array('admintime', $cvsGrants0, true) && !in_array('mxtime', $cvsGrants0, true);
+  $cvsAdminDept = $cvsAdminOnly
+    || ($cvsSlug0 !== '' && function_exists('jaxmx_dept') && jaxmx_dept($cvsSlug0) === 'admin');
   /* each entry: key (anchor id + grant), tag (shortcode), label (menu text) */
   $out = array();
   $order = array(
@@ -1317,6 +1329,7 @@ function jaxauth_canvas_widgets($u) {
        shortcode becomes two widgets a canvas can carry separately. Someone holding both gets
        a single IT tab with Status / Infrastructure underneath it (see $gmap and $subLabels
        below); someone holding one gets that page on its own with no sub-tabs. */
+    array('admintime', '[jaxaero_admin_time]', 'My Hours (Admin)'),
     array('itstatus', '[jaxaero_it_status tab="status"]', 'IT Status'),
     array('itinfra', '[jaxaero_it_status tab="infra"]', 'IT Infrastructure'),
   );
@@ -1522,7 +1535,7 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* Ryan, Sep 4 2026 (lease): the Revenue bubble is now the Accounting
      department (Revenue / Sales tax / Leases / Depreciation as a sub-menu, see $subGroups
      below); the lessor's statements are their own bubble. */
-  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease Statements', 'mxpay' => 'My Pay', 'mxlog' => 'MX', 'mxbrief' => 'MX', 'itstatus' => 'IT', 'itinfra' => 'IT');
+  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease Statements', 'mxpay' => 'My Pay', 'mxlog' => 'MX', 'mxbrief' => 'MX', 'itstatus' => 'IT', 'itinfra' => 'IT', 'admintime' => 'My Hours (Admin)');
   /* Ryan, Sep 7 2026: "MX users should be My hours and My pay ... model the user
      experience for MX users after that of 1099 contractors (with regard to
      navigation)." A contractor's canvas is work area first, then My Pay, as plain
