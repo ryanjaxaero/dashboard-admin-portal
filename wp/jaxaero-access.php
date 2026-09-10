@@ -2091,7 +2091,7 @@ function jaxauth_frame_head() {
     . '.note{background:var(--amber-tint);border:1px solid var(--amber-line);color:var(--amber);border-radius:var(--r-md);padding:10px 12px;font-size:13.5px;margin-bottom:12px}'
     . '.small{font-size:12.5px;color:var(--ink2)}'
     . 'table{width:100%;border-collapse:collapse}'
-    . 'th{text-align:left;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);font-weight:800;padding:7px 9px;border-bottom:1px solid var(--hair);background:var(--tint)}'
+    . 'th{text-align:left;font-size:12.5px;color:var(--ink2);font-weight:700;padding:7px 9px;border-bottom:1px solid var(--hair);background:var(--tint)}'
     . 'td{padding:8px 9px;border-bottom:1px solid var(--hair);font-size:13.5px;vertical-align:middle}'
     . '.ulist{max-height:560px;overflow-y:auto}'
     . '.urow{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:0;border-radius:var(--r-sm);padding:8px 9px;cursor:pointer;font:inherit;color:var(--ink)}'
