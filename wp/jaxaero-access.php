@@ -39,6 +39,8 @@
      lessor     [jaxaero_lessor]          lessor portal - the VR Leasing login, read-only
      depr       [jaxaero_depreciation]    fixed-asset register - canvas Accounting tab
      depr_view  [jaxaero_depreciation]    the same register, read only (alt key)
+     itstatus   [jaxaero_it_status]       IT status - canvas IT tab, drawn as tab="status"
+     itinfra    [jaxaero_it_status]       IT infrastructure - same widget, tab="infra"
      Sub-widget keys (rev.mom etc.) are phase 2 - they need guards
      inside snippets 5-9 and are deliberately not claimed here.
 
@@ -124,8 +126,26 @@ function jaxauth_registry() {
     'lessor'    => ['Lessor Portal', 'VR Leasing read-only statements'],
     'invoice'   => ['Own Pay Dashboard', 'only the bound person - instructor or 1099 contractor'],
     'access'    => ['Access Admin', 'this admin panel'],
-    /* Ryan, Sep 3 2026: the IT status page (snippet 20) is deliberately NOT a grantable
-       widget or canvas tab - only dashboard admins reach it, via the Access admin button. */
+    /* Ryan, Sep 10 2026: "Make the IT status and IT infrastructure tools standalone widgets
+       that can be added to a user canvas. We may be hiring an IT specialist soon and we will
+       create a user canvas for him." Asked how much that person should see, he answered:
+       "IT person needs full access to IT status and infrastructure/build guidance."
+
+       This REPLACES the Sep 3 2026 decision, which said the IT page (snippet 20) was for
+       dashboard admins only and was deliberately never a grantable widget. Ryan reversed it
+       himself, so that rule is gone rather than sitting here contradicting the code.
+
+       Two toggles, not one, because Ryan asked for widgets plural: a canvas can carry the
+       status page on its own, the infrastructure page on its own, or both. Both show the
+       whole thing - Ryan was told in as many words that the Infrastructure tab lists every
+       web address this site answers on and marks the ones with nothing checking a sign-in
+       in front of them, and he chose full access anyway. There is no trimmed-down version.
+
+       Nobody holds either toggle. Handing one to a person is a human decision made on the
+       Access admin screen, and the IT specialist has not been hired yet. Admins keep the
+       way in they already had - the two buttons in the IT card on that same screen. */
+    'itstatus'  => ['IT Status', 'is every tool, server and scheduled job behind the dashboard working'],
+    'itinfra'   => ['IT Infrastructure', 'what the site is built from - snippets, web addresses, jobs and build guidance'],
   ];
 }
 
@@ -171,6 +191,13 @@ function jaxauth_shortcode_map() {
     /* Ryan, Sep 4 2026 (depreciation): the fixed-asset register, Accounting's
        fourth tab. An ordinary grant. */
     'jaxaero_depreciation'   => 'depr',
+    /* Ryan, Sep 10 2026 (IT): the IT widget draws two tabs, Status and Infrastructure, and
+       each is now its own toggle. On a canvas it is asked for ONE tab at a time - the tag
+       carries tab="status" or tab="infra" - so this map can only name one key. It names the
+       status one; the alt-key list below lets someone who holds only Infrastructure past
+       this gate, and snippet 20 then checks the key belonging to the tab it was actually
+       asked for. Holding one toggle therefore never opens the other. */
+    'jaxaero_it_status'      => 'itstatus',
   ];
 }
 
@@ -183,6 +210,9 @@ function jaxauth_shortcode_alt_keys() {
   return [
     'jaxaero_depreciation' => ['depr', 'depr_view'],
     'jaxaero_lessor'       => ['lessor', 'lease'],
+    /* Ryan, Sep 10 2026: either IT toggle gets the IT widget's tag through this gate;
+       snippet 20 decides which of its two tabs that person is allowed to see. */
+    'jaxaero_it_status'    => ['itstatus', 'itinfra'],
   ];
 }
 
@@ -1276,6 +1306,14 @@ function jaxauth_canvas_widgets($u) {
     array('depr', '[jaxaero_depreciation]', 'Depreciation'),
     array('depr_view', '[jaxaero_depreciation]', 'Depreciation'),
     array('docs', '[jaxaero_documents]', 'Documents'),
+    /* Ryan, Sep 10 2026: "Make the IT status and IT infrastructure tools standalone widgets
+       that can be added to a user canvas." Two toggles means two entries here. Both run the
+       SAME widget (snippet 20) and differ only in the tab= they ask it for, which is how one
+       shortcode becomes two widgets a canvas can carry separately. Someone holding both gets
+       a single IT tab with Status / Infrastructure underneath it (see $gmap and $subLabels
+       below); someone holding one gets that page on its own with no sub-tabs. */
+    array('itstatus', '[jaxaero_it_status tab="status"]', 'IT Status'),
+    array('itinfra', '[jaxaero_it_status tab="infra"]', 'IT Infrastructure'),
   );
   /* Ryan, Aug 31 PM: the canvas follows the ACTUAL Access Admin toggles for
      everyone - including admins. jaxauth_can()'s admin bypass put every widget
@@ -1479,7 +1517,7 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* Ryan, Sep 4 2026 (lease): the Revenue bubble is now the Accounting
      department (Revenue / Sales tax / Leases / Depreciation as a sub-menu, see $subGroups
      below); the lessor's statements are their own bubble. */
-  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease Statements', 'mxpay' => 'My Pay', 'mxlog' => 'MX', 'mxbrief' => 'MX');
+  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease Statements', 'mxpay' => 'My Pay', 'mxlog' => 'MX', 'mxbrief' => 'MX', 'itstatus' => 'IT', 'itinfra' => 'IT');
   /* Ryan, Sep 7 2026: "MX users should be My hours and My pay ... model the user
      experience for MX users after that of 1099 contractors (with regard to
      navigation)." A contractor's canvas is work area first, then My Pay, as plain
@@ -1508,7 +1546,9 @@ add_shortcode('jaxauth_user_canvas', function () {
      reorder below yields My Hours / My Pay / Logbook; nobody held it before Sep 7 2026. */
   /* 'MX Overview' sits right after 'Safety' and ahead of My Hours / Logbook, so a mechanic
      lands on the briefing (Ryan, Sep 7 2026: "similar to the Safety page for instructors") */
-  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'MX Overview', 'My Pay', 'My Hours', 'Logbook', 'Sales & Marketing', 'MX', 'Documents', 'Lease Statements');
+  /* 'IT' is appended after 'Lease Statements' for the same reason that one was: adding it at
+     the end means no existing person's remembered tab number points at a different bubble. */
+  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'MX Overview', 'My Pay', 'My Hours', 'Logbook', 'Sales & Marketing', 'MX', 'Documents', 'Lease Statements', 'IT');
   $groups = array();
   foreach ($gorder as $gl) { $groups[$gl] = array(); }
   foreach ($tags as $t) { $gl = isset($gmap[$t['key']]) ? $gmap[$t['key']] : 'Documents'; $groups[$gl][] = $t; }
@@ -1633,8 +1673,12 @@ add_shortcode('jaxauth_user_canvas', function () {
        the rest are lazy placeholders the loader still fetches - it drains its
        whole queue, visible or not. A group with a single widget gets no strip. */
     /* Ryan, Sep 7 2026: the MX bubble is a department too - My Hours | Logbook as sub-tabs */
-    $subGroups = array('Accounting', 'MX');
-    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales Tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation', 'mxbrief' => 'Overview', 'mxtime' => 'My Hours', 'mxlog' => 'Logbook');
+    /* Ryan, Sep 10 2026: IT is a department too - Status | Infrastructure as sub-tabs, the
+       same two tabs the widget draws for an admin on its own page. A person who holds only
+       one of the two gets no strip at all: the line below only builds one for a bubble
+       holding more than one widget. */
+    $subGroups = array('Accounting', 'MX', 'IT');
+    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales Tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation', 'mxbrief' => 'Overview', 'mxtime' => 'My Hours', 'mxlog' => 'Logbook', 'itstatus' => 'Status', 'itinfra' => 'Infrastructure');
     $gi = 0; $tabsH = ''; $bodyH = '';
     foreach ($groups as $gl => $gw) {
       $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">' . esc_html($gl) . '</button>';
@@ -2508,7 +2552,8 @@ function jaxauth_admin_html() {
       mx.appendChild(tr);
     });
     var achdr=document.createElement('tr');
-    achdr.innerHTML='<th colspan="3" style="text-align:left;padding-top:12px;border-top:1px solid var(--hair)">Aircraft owner statements (view-only)</th>';
+    /* Ryan, Sep 10 2026: table column headers are Title Case, amending the earlier standard */
+    achdr.innerHTML='<th colspan="3" style="text-align:left;padding-top:12px;border-top:1px solid var(--hair)">Aircraft Owner Statements (View-Only)</th>';
     mx.appendChild(achdr);
     var uac=u.ac||[];
     ACTAILS.forEach(function(tl){
