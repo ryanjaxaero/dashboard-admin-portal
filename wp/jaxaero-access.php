@@ -1302,8 +1302,18 @@ function jaxauth_canvas_widgets($u) {
        listed; the shortcode stays in snippet 18 for the day it comes back. */
     /* Ryan, Sep 7 2026: "In the MX area, I want a logbook tab." Every My Hours holder
        (mechanics and editors alike) gets the aircraft logbooks, listed only while
-       snippet 23 provides the shortcode. */
-    if ($w[0] === 'mxtime' && in_array('mxtime', $cvsG, true) && shortcode_exists('jaxaero_mx_logbook')) {
+       snippet 23 provides the shortcode.
+
+       HIDDEN Sep 10 2026, Ryan: "Hide the logbook feature for MX department and all users
+       for now." The tab is off for everyone, not just the mechanics. It was showing an empty
+       book to every holder because Flight Schedule Pro has not added the maintenance product
+       to our API key, so there is nothing to read yet - see docs/DECISIONS.md.
+
+       Nothing else is touched: snippet 23 stays installed and its hourly sync keeps running,
+       so the day FSP enables the product the entries are already there. To bring the tab back,
+       set option jaxauth_show_mxlog to 1 - no deploy needed. */
+    if ($w[0] === 'mxtime' && in_array('mxtime', $cvsG, true) && shortcode_exists('jaxaero_mx_logbook')
+        && (int) get_option('jaxauth_show_mxlog', 0) === 1) {
       $out[] = array('key' => 'mxlog', 'tag' => '[jaxaero_mx_logbook]', 'label' => 'Logbook');
     }
     if ($w[0] === 'owner') {
