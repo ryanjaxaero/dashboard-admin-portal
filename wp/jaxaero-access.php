@@ -2283,7 +2283,6 @@ add_shortcode('jaxaero_access_admin', function () {
 function jaxauth_admin_html() {
   $nonce = wp_create_nonce('wp_rest');
   /* Ryan, Sep 3 2026: a button to the IT status page (snippet 20) from the admin portal */
-  $itPg = get_page_by_path('it-status'); $itUrl = $itPg ? get_permalink($itPg) : home_url('/it-status/');
   $restBase = esc_url_raw(rest_url('jaxauth/v1/'));
   $reg = jaxauth_registry();
   $users = [];
@@ -2354,19 +2353,13 @@ function jaxauth_admin_html() {
     <div class="sub">Pick a person, flip toggles, save. Changes apply on their next page load. Every save is logged below.</div>
   </div>
   <?php /* Ryan, Sep 6 2026 design audit: no inline font-size or padding on buttons - .b1/.b2 render at the 13.5px / 9px 16px spec */ ?>
-  <?php /* Ryan, Sep 9 2026: "Make the IT infrastructure tool a submenu item in an IT status
-           section that lives in the admin dashboard." One IT section, two entries, each opening
-           its own tab of the IT widget. */ ?>
-  <div class="mod" style="margin:0 0 14px">
-    <span class="cardh">IT</span>
-    <?php /* Ryan, Sep 9 2026: "remove the descriptors ... that live around the buttons for
-             those" - the two entries are self-describing, and on a phone the sentences pushed
-             the second button most of a screen below the first. */ ?>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
-      <a class="b2" href="<?php echo esc_url($itUrl); ?>" target="_top">IT Status</a>
-      <a class="b2" href="<?php echo esc_url($itUrl . '#infrastructure'); ?>" target="_top">IT Infrastructure</a>
-    </div>
-  </div>
+  <?php /* Ryan, Sep 10 2026: "Remove the IT status and IT infrastructure section from admin
+           page since they are now standalone widgets." The card lived here from Sep 9, when the
+           IT widget was deliberately not grantable and this was the only door to it. Both are
+           canvas widgets with their own toggles as of this morning, so the card had become a
+           second door that bypassed the toggles instead of honouring them. Switch IT Status or
+           IT Infrastructure on for a person and it appears on their own page, like every other
+           widget. */ ?>
   <div class="grid2">
     <div class="mod ulist">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
