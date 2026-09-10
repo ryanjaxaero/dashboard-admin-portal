@@ -100,21 +100,22 @@ function jaxauth_registry() {
     'sales'     => ['Sales', 'pipeline, enrollment tracking and commissions'],
     'marketing' => ['Marketing', 'Meta Ads + ad campaigns'],
     'safety'    => ['Safety', 'company-wide FOQA safety data'],
-    /* Ben, Sep 6 2026: "Rebrand 'Timeclock' to 'My Hours'". The "(MX)" suffix keeps
+    /* Ryan, Sep 10 2026: "In both the My Hours Admin and My Hours MX, change 'My Hours' to
+       'Timeclock'" - reversing Ben's Sep 6 rename. The "(MX)" suffix keeps
        this grant distinct from the instructors' own My Hours in the Access admin
        list - theirs is the binding-driven 'myhours' canvas key, not a grant. Ben
        also asked to "Remove the Pay column entirely", so the blurb no longer
        promises pay here. */
-    'mxtime'    => ['My Hours (MX)', 'mechanic clock in/out and hours by pay period'],
+    'mxtime'    => ['Timeclock (MX)', 'mechanic clock in/out and hours by pay period'],
     /* Ryan, Sep 10 2026: "Create a separate widget called 'My Hours (Admin)' and keep the
        'My Hours (MX)' separate in case we want to build them slightly differently." Same clock
        engine, its own widget and its own toggle - front-desk staff never get the MX Overview,
        the Logbook or the mechanic landing that ride along with mxtime. */
-    'admintime' => ['My Hours (Admin)', 'front-desk clock in/out for time on property, hours by pay period'],
+    'admintime' => ['Timeclock (Admin)', 'front-desk clock in/out for time on property, hours by pay period'],
     /* Ryan, Sep 7 2026: "I want edit hours, especially for the MX department, to be a
        toggle that we can turn on for Bruce, the maintenance manager. Non-manager MX
        techs should not be able to do anything other than clock in and clock out."
-       This is that toggle. It adds the Edit hours tab inside My Hours (MX); a tech
+       This is that toggle. It adds the Edit hours tab inside Timeclock (MX); a tech
        without it sees the clock alone and asks a manager to fix a mistake. */
     'mxedit'    => ['Edit MX Hours', 'add or fix hours for every mechanic by pay period - the maintenance manager'],
     'tax'       => ['Sales Tax', 'aircraft sales tax page'],
@@ -1307,10 +1308,10 @@ function jaxauth_canvas_widgets($u) {
     array('auto', '[jaxaero_revenue_auto]', 'Revenue Dashboard'),
     array('pay', '[jaxaero_payroll]', 'Pay Portal'),
     array('safety', '[jaxaero_safety]', 'Safety'),
-    /* Ben, Sep 6 2026: "Rebrand 'Timeclock' to 'My Hours'" - this label is the
-       hamburger-menu text and the canvas tab text. The department bubble the
-       widget sits in stays 'MX' ($gmap / $gorder below), like Accounting. */
-    array('mxtime', '[jaxaero_mx_time]', 'My Hours'),
+    /* Ryan, Sep 10 2026: "change 'My Hours' to 'Timeclock'" - reversing Ben's Sep 6 rename.
+       This label is the hamburger-menu text and the canvas tab text. The department bubble
+       the widget sits in stays 'MX' ($gmap / $gorder below), like Accounting. */
+    array('mxtime', '[jaxaero_mx_time]', 'Timeclock'),
     /* Ryan, Sep 9 2026 (Ben, punch list 15): headings are title case, matching the registry label */
     array('ownerstmt', '[jaxaero_aircraft_owner]', 'Aircraft Owner Statements'),
     array('owner', '[jaxaero_owner_portal]', 'My Aircraft'),
@@ -1329,7 +1330,7 @@ function jaxauth_canvas_widgets($u) {
        shortcode becomes two widgets a canvas can carry separately. Someone holding both gets
        a single IT tab with Status / Infrastructure underneath it (see $gmap and $subLabels
        below); someone holding one gets that page on its own with no sub-tabs. */
-    array('admintime', '[jaxaero_admin_time]', 'My Hours (Admin)'),
+    array('admintime', '[jaxaero_admin_time]', 'Timeclock (Admin)'),
     array('itstatus', '[jaxaero_it_status tab="status"]', 'IT Status'),
     array('itinfra', '[jaxaero_it_status tab="infra"]', 'IT Infrastructure'),
   );
@@ -1410,7 +1411,7 @@ function jaxauth_canvas_widgets($u) {
      only mxtime, keep the plain label Ben asked for. */
   $cvsKeys = array_map(function ($x) { return $x['key']; }, $out);
   if (in_array('mxtime', $cvsKeys, true) && in_array('myhours', $cvsKeys, true)) {
-    foreach ($out as $cvsI => $cvsW) { if ($cvsW['key'] === 'mxtime') { $out[$cvsI]['label'] = $cvsAdminDept ? 'Admin Hours' : 'My Hours (MX)'; } }
+    foreach ($out as $cvsI => $cvsW) { if ($cvsW['key'] === 'mxtime') { $out[$cvsI]['label'] = $cvsAdminDept ? 'Timeclock (Admin)' : 'Timeclock (MX)'; } }
   }
   return $out;
 }
@@ -1535,7 +1536,7 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* Ryan, Sep 4 2026 (lease): the Revenue bubble is now the Accounting
      department (Revenue / Sales tax / Leases / Depreciation as a sub-menu, see $subGroups
      below); the lessor's statements are their own bubble. */
-  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease Statements', 'mxpay' => 'My Pay', 'mxlog' => 'MX', 'mxbrief' => 'MX', 'itstatus' => 'IT', 'itinfra' => 'IT', 'admintime' => 'My Hours (Admin)');
+  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease Statements', 'mxpay' => 'My Pay', 'mxlog' => 'MX', 'mxbrief' => 'MX', 'itstatus' => 'IT', 'itinfra' => 'IT', 'admintime' => 'Timeclock (Admin)');
   /* Ryan, Sep 7 2026: "MX users should be My hours and My pay ... model the user
      experience for MX users after that of 1099 contractors (with regard to
      navigation)." A contractor's canvas is work area first, then My Pay, as plain
@@ -1551,8 +1552,8 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* a bound mechanic gets the briefing as its own landing tab (Ryan, Sep 7 2026: "similar
      to the Safety page"); editors keep it as the first sub-tab of the MX department so no
      saved tab index moves for them */
-  if ($cvsMech) { $gmap['mxtime'] = 'My Hours'; $gmap['mxlog'] = 'Logbook'; $gmap['mxbrief'] = 'MX Overview'; }
-  if ($cvsAdminDept) { $gmap['mxtime'] = 'My Hours'; }
+  if ($cvsMech) { $gmap['mxtime'] = 'Timeclock'; $gmap['mxlog'] = 'Logbook'; $gmap['mxbrief'] = 'MX Overview'; }
+  if ($cvsAdminDept) { $gmap['mxtime'] = 'Timeclock'; }
   /* Ben, Sep 2 (punch list 13B): Log Detailing leads so Sam's canvas opens on
      it with My Pay as the next tab. Safety now precedes My Pay and My Hours
      follows it, so an instructor's tabs read Safety / My Pay / My Hours. Nobody
@@ -1567,7 +1568,7 @@ add_shortcode('jaxauth_user_canvas', function () {
      lands on the briefing (Ryan, Sep 7 2026: "similar to the Safety page for instructors") */
   /* 'IT' is appended after 'Lease Statements' for the same reason that one was: adding it at
      the end means no existing person's remembered tab number points at a different bubble. */
-  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'MX Overview', 'My Pay', 'My Hours', 'Logbook', 'Sales & Marketing', 'MX', 'Documents', 'Lease Statements', 'IT');
+  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'MX Overview', 'My Pay', 'My Hours', 'Timeclock', 'Timeclock (Admin)', 'Logbook', 'Sales & Marketing', 'MX', 'Documents', 'Lease Statements', 'IT');
   $groups = array();
   foreach ($gorder as $gl) { $groups[$gl] = array(); }
   foreach ($tags as $t) { $gl = isset($gmap[$t['key']]) ? $gmap[$t['key']] : 'Documents'; $groups[$gl][] = $t; }
@@ -1576,12 +1577,12 @@ add_shortcode('jaxauth_user_canvas', function () {
      the contractor order (work area, then pay). $gorder keeps Ben's instructor order
      (Safety / My Pay / My Hours) for everyone else, so only the mechanic's two tabs
      swap, and the first group is the default tab a fresh browser opens on. */
-  if ($cvsMech && isset($groups['My Hours'], $groups['My Pay'])) {
+  if ($cvsMech && isset($groups['Timeclock'], $groups['My Pay'])) {
     $cvsRe = array();
     foreach ($groups as $cvsGl => $cvsGv) {
       if ($cvsGl === 'My Pay') { continue; }
       $cvsRe[$cvsGl] = $cvsGv;
-      if ($cvsGl === 'My Hours') { $cvsRe['My Pay'] = $groups['My Pay']; }
+      if ($cvsGl === 'Timeclock') { $cvsRe['My Pay'] = $groups['My Pay']; }
     }
     $groups = $cvsRe;
   }
@@ -1697,7 +1698,7 @@ add_shortcode('jaxauth_user_canvas', function () {
        one of the two gets no strip at all: the line below only builds one for a bubble
        holding more than one widget. */
     $subGroups = array('Accounting', 'MX', 'IT');
-    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales Tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation', 'mxbrief' => 'Overview', 'mxtime' => 'My Hours', 'mxlog' => 'Logbook', 'itstatus' => 'Status', 'itinfra' => 'Infrastructure');
+    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales Tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation', 'mxbrief' => 'Overview', 'mxtime' => 'Timeclock', 'mxlog' => 'Logbook', 'itstatus' => 'Status', 'itinfra' => 'Infrastructure');
     $gi = 0; $tabsH = ''; $bodyH = '';
     foreach ($groups as $gl => $gw) {
       $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">' . esc_html($gl) . '</button>';
@@ -1743,10 +1744,9 @@ add_shortcode('jaxauth_user_canvas', function () {
       $bodyH .= '<div class="jaxdash-g" id="jaxg-' . $gi . '" data-gkeys="">'
         . '<div class="jaxmx"><div class="jaxmx-hd"><div class="jaxmx-t">MX portal coming soon!</div>'
         . '<div class="jaxmx-sub">Maintenance department tools will live here.</div></div>'
-        /* Ben, Sep 6 2026: "Rebrand 'Timeclock' to 'My Hours'" - the admin-only
-           empty state names the feature the way the mechanics will see it.
-           Ryan, Sep 6 2026 design audit: the old word is gone from the copy too. */
-        . '<div class="jaxmx-mod">Nothing to show yet. The mechanic My Hours, task mix and MX pay views land in this tab when they are built.</div></div></div>';
+        /* The admin-only empty state names the feature the way the mechanics see it.
+           Ben called it My Hours on Sep 6 2026; Ryan changed it back to Timeclock on Sep 10. */
+        . '<div class="jaxmx-mod">Nothing to show yet. The mechanic Timeclock, task mix and MX pay views land in this tab when they are built.</div></div></div>';
     }
     $html .= '<div class="jaxdash-tabs" id="jaxdashTabs">' . $tabsH . '</div>' . $bodyH;
     /* Sep 7 2026 review: a View-as / IP View preview runs under the target's identity but
