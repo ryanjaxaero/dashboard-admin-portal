@@ -1311,7 +1311,7 @@ function jaxauth_canvas_widgets($u) {
     /* Ryan, Sep 10 2026: "change 'My Hours' to 'Timeclock'" - reversing Ben's Sep 6 rename.
        This label is the hamburger-menu text and the canvas tab text. The department bubble
        the widget sits in stays 'MX' ($gmap / $gorder below), like Accounting. */
-    array('mxtime', '[jaxaero_mx_time]', 'Timeclock'),
+    array('mxtime', '[jaxaero_mx_time]', 'Timeclock (MX)'),
     /* Ryan, Sep 9 2026 (Ben, punch list 15): headings are title case, matching the registry label */
     array('ownerstmt', '[jaxaero_aircraft_owner]', 'Aircraft Owner Statements'),
     array('owner', '[jaxaero_owner_portal]', 'My Aircraft'),
@@ -1536,7 +1536,7 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* Ryan, Sep 4 2026 (lease): the Revenue bubble is now the Accounting
      department (Revenue / Sales tax / Leases / Depreciation as a sub-menu, see $subGroups
      below); the lessor's statements are their own bubble. */
-  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease Statements', 'mxpay' => 'My Pay', 'mxlog' => 'MX', 'mxbrief' => 'MX', 'itstatus' => 'IT', 'itinfra' => 'IT', 'admintime' => 'Timeclock (Admin)');
+  $gmap = array('logdetail' => 'Log Detailing', 'auto' => 'Accounting', 'tax' => 'Accounting', 'lease' => 'Accounting', 'depr' => 'Accounting', 'depr_view' => 'Accounting', 'ownerstmt' => 'Airplanes', 'owner' => 'Airplanes', 'pay' => 'Payroll', 'mypay' => 'My Pay', 'myhours' => 'My Hours', 'safety' => 'Safety', 'sales' => 'Sales & Marketing', 'marketing' => 'Sales & Marketing', 'mxtime' => 'MX', 'docs' => 'Documents', 'lessor' => 'Lease Statements', 'mxpay' => 'My Pay', 'mxlog' => 'MX', 'mxbrief' => 'MX', 'itstatus' => 'IT', 'itinfra' => 'IT', 'admintime' => 'My Hours');
   /* Ryan, Sep 7 2026: "MX users should be My hours and My pay ... model the user
      experience for MX users after that of 1099 contractors (with regard to
      navigation)." A contractor's canvas is work area first, then My Pay, as plain
@@ -1552,8 +1552,8 @@ add_shortcode('jaxauth_user_canvas', function () {
   /* a bound mechanic gets the briefing as its own landing tab (Ryan, Sep 7 2026: "similar
      to the Safety page"); editors keep it as the first sub-tab of the MX department so no
      saved tab index moves for them */
-  if ($cvsMech) { $gmap['mxtime'] = 'Timeclock'; $gmap['mxlog'] = 'Logbook'; $gmap['mxbrief'] = 'MX Overview'; }
-  if ($cvsAdminDept) { $gmap['mxtime'] = 'Timeclock'; }
+  if ($cvsMech) { $gmap['mxtime'] = 'My Hours'; $gmap['mxlog'] = 'Logbook'; $gmap['mxbrief'] = 'MX Overview'; }
+  if ($cvsAdminDept) { $gmap['mxtime'] = 'My Hours'; }
   /* Ben, Sep 2 (punch list 13B): Log Detailing leads so Sam's canvas opens on
      it with My Pay as the next tab. Safety now precedes My Pay and My Hours
      follows it, so an instructor's tabs read Safety / My Pay / My Hours. Nobody
@@ -1568,7 +1568,7 @@ add_shortcode('jaxauth_user_canvas', function () {
      lands on the briefing (Ryan, Sep 7 2026: "similar to the Safety page for instructors") */
   /* 'IT' is appended after 'Lease Statements' for the same reason that one was: adding it at
      the end means no existing person's remembered tab number points at a different bubble. */
-  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'MX Overview', 'My Pay', 'My Hours', 'Timeclock', 'Timeclock (Admin)', 'Logbook', 'Sales & Marketing', 'MX', 'Documents', 'Lease Statements', 'IT');
+  $gorder = array('Log Detailing', 'Accounting', 'Airplanes', 'Payroll', 'Safety', 'MX Overview', 'My Pay', 'My Hours', 'Logbook', 'Sales & Marketing', 'MX', 'Documents', 'Lease Statements', 'IT');
   $groups = array();
   foreach ($gorder as $gl) { $groups[$gl] = array(); }
   foreach ($tags as $t) { $gl = isset($gmap[$t['key']]) ? $gmap[$t['key']] : 'Documents'; $groups[$gl][] = $t; }
@@ -1577,12 +1577,12 @@ add_shortcode('jaxauth_user_canvas', function () {
      the contractor order (work area, then pay). $gorder keeps Ben's instructor order
      (Safety / My Pay / My Hours) for everyone else, so only the mechanic's two tabs
      swap, and the first group is the default tab a fresh browser opens on. */
-  if ($cvsMech && isset($groups['Timeclock'], $groups['My Pay'])) {
+  if ($cvsMech && isset($groups['My Hours'], $groups['My Pay'])) {
     $cvsRe = array();
     foreach ($groups as $cvsGl => $cvsGv) {
       if ($cvsGl === 'My Pay') { continue; }
       $cvsRe[$cvsGl] = $cvsGv;
-      if ($cvsGl === 'Timeclock') { $cvsRe['My Pay'] = $groups['My Pay']; }
+      if ($cvsGl === 'My Hours') { $cvsRe['My Pay'] = $groups['My Pay']; }
     }
     $groups = $cvsRe;
   }
@@ -1697,8 +1697,12 @@ add_shortcode('jaxauth_user_canvas', function () {
        same two tabs the widget draws for an admin on its own page. A person who holds only
        one of the two gets no strip at all: the line below only builds one for a bubble
        holding more than one widget. */
-    $subGroups = array('Accounting', 'MX', 'IT');
-    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales Tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation', 'mxbrief' => 'Overview', 'mxtime' => 'Timeclock', 'mxlog' => 'Logbook', 'itstatus' => 'Status', 'itinfra' => 'Infrastructure');
+    /* Ryan, Sep 10 2026: "Put 'Timeclock (admin)' or 'Timeclock (mx)' as a sub-widget under
+       'My Hours' but keep them as separate toggle switches in the admin portal." One bubble,
+       the clocks as sub-tabs inside it, two independent toggles in Access Admin. A person
+       holding one of them gets no strip, the same as every other department here. */
+    $subGroups = array('Accounting', 'MX', 'IT', 'My Hours');
+    $subLabels = array('auto' => 'Revenue', 'tax' => 'Sales Tax', 'lease' => 'Leases', 'depr' => 'Depreciation', 'depr_view' => 'Depreciation', 'mxbrief' => 'Overview', 'mxtime' => 'Timeclock (MX)', 'admintime' => 'Timeclock (Admin)', 'myhours' => 'Flight Hours', 'mxlog' => 'Logbook', 'itstatus' => 'Status', 'itinfra' => 'Infrastructure');
     $gi = 0; $tabsH = ''; $bodyH = '';
     foreach ($groups as $gl => $gw) {
       $tabsH .= '<button type="button" class="jaxdash-tab" data-g="' . $gi . '">' . esc_html($gl) . '</button>';
