@@ -348,27 +348,110 @@ function jaxauth_log_add($txt) {
    admin log, which this snippet has written since August; nothing is stored on that path. */
 function jaxauth_touch_login($uid) {
   $uid = (int) $uid;
-  if ($uid > 0) { update_user_meta($uid, 'jaxauth_last_login', (string) time()); }
+  if ($uid > 0) { update_user_meta($uid, 'jaxauth_last_login', (string) time()); update_user_meta($uid, 'jaxauth_last_seen', (string) time()); }
 }
 add_action('wp_login', function ($login, $user) {
   if ($user instanceof WP_User) { jaxauth_touch_login($user->ID); }
 }, 10, 2);
-function jaxauth_last_login_label($uid, $name, $log) {
-  $ts = (int) get_user_meta((int) $uid, 'jaxauth_last_login', true);
-  if ($ts > 0) { return wp_date('M j, Y g:i A', $ts); }
+/* Ryan, 3:20 PM: "make sure it's accurate." Three sources, best first. The stamp above. Then
+   WordPress's own session tokens: every cookie still alive carries the exact time it was signed
+   in - by either door, and from before the stamp existed - until it expires (14 days with
+   Remember me, two without), so the newest of them IS the last sign-in whenever one is alive.
+   Last, the newest "<name> signed in." line in the admin log, for a sign-in older than any live
+   cookie; that line carries no year, so this year unless that would put it in the future.
+   Returns array(timestamp, source) - source is 'stamp', 'session', 'log' or ''. */
+function jaxauth_last_login_ts($uid, $name = '', $log = null) {
+  $uid = (int) $uid;
+  $ts = (int) get_user_meta($uid, 'jaxauth_last_login', true);
+  $src = $ts > 0 ? 'stamp' : '';
+  if ($uid > 0 && class_exists('WP_Session_Tokens')) {
+    foreach ((array) WP_Session_Tokens::get_instance($uid)->get_all() as $sess) {
+      $l = (is_array($sess) && isset($sess['login'])) ? (int) $sess['login'] : 0;
+      if ($l > $ts) { $ts = $l; $src = 'session'; }
+    }
+  }
+  if ($ts > 0) { return array($ts, $src); }
+  if ($log === null) { $log = get_option('jaxauth_log', array()); }
   $want = sanitize_text_field((string) $name . ' signed in.');
   foreach ((array) $log as $e) {
     if (!is_array($e) || !isset($e['txt'], $e['t']) || $e['txt'] !== $want) { continue; }
-    /* the log line carries no year: this year, unless that would put it in the future */
     $tz = wp_timezone();
     $now = current_datetime();
     $d = DateTime::createFromFormat('M j, g:i A Y', (string) $e['t'] . ' ' . $now->format('Y'), $tz);
     if ($d && $d->getTimestamp() > $now->getTimestamp() + 86400) {
       $d = DateTime::createFromFormat('M j, g:i A Y', (string) $e['t'] . ' ' . ((int) $now->format('Y') - 1), $tz);
     }
-    return $d ? wp_date('M j, Y g:i A', $d->getTimestamp()) : (string) $e['t'];
+    return $d ? array($d->getTimestamp(), 'log') : array(0, '');
   }
-  return '';
+  return array(0, '');
+}
+function jaxauth_last_login_label($uid, $name, $log) {
+  $x = jaxauth_last_login_ts($uid, $name, $log);
+  return $x[0] > 0 ? wp_date('M j, Y g:i A', $x[0]) : '';
+}
+/* "Last seen": a cookie can outlive a fortnight of daily use, so the last sign-in alone can make
+   a busy person look absent. Any signed-in page load stamps jaxauth_last_seen, at most once every
+   ten minutes. Not a REST call (the ops channel signs in with an application password on every
+   request), not cron, not admin-ajax; during a view-as preview the REAL admin is the one seen,
+   never the person being previewed (jaxauth_viewas_boot swaps identity at init priority 0 and
+   leaves the real id in jaxauth_viewas_real). */
+function jaxauth_touch_seen($uid) {
+  $uid = (int) $uid;
+  if ($uid <= 0) { return; }
+  $was = (int) get_user_meta($uid, 'jaxauth_last_seen', true);
+  if (time() - $was >= 600) { update_user_meta($uid, 'jaxauth_last_seen', (string) time()); }
+}
+add_action('init', function () {
+  if (wp_doing_cron() || wp_doing_ajax()) { return; }
+  $uri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
+  if (strpos($uri, '/wp-json/') !== false || strpos($uri, 'rest_route=') !== false) { return; }
+  $uid = !empty($GLOBALS['jaxauth_viewas_real']) ? (int) $GLOBALS['jaxauth_viewas_real'] : (int) get_current_user_id();
+  if ($uid > 0) { jaxauth_touch_seen($uid); }
+}, 20);
+function jaxauth_last_seen_label($uid) {
+  $ts = (int) get_user_meta((int) $uid, 'jaxauth_last_seen', true);
+  return $ts > 0 ? wp_date('M j, Y g:i A', $ts) : '';
+}
+/* the log names people, not ids: two accounts with one display name (there are two "Ryan Winter"s)
+   would share a line, so the log is consulted only for a name exactly one account carries. Returns
+   name (lower-cased, trimmed) => how many accounts carry it. */
+function jaxauth_names_count($people) {
+  $n = array();
+  foreach ((array) $people as $p) {
+    $k = strtolower(trim((string) $p->display_name));
+    $n[$k] = isset($n[$k]) ? $n[$k] + 1 : 1;
+  }
+  return $n;
+}
+function jaxauth_log_for($name, $once, $log) {
+  $k = strtolower(trim((string) $name));
+  return (isset($once[$k]) && $once[$k] === 1) ? $log : array();
+}
+/* the admin-only read-back behind the two fields: every person with the time, its source and the
+   live sessions it was checked against - so the card can be verified against its sources */
+function jaxauth_rest_last_login() {
+  $log = get_option('jaxauth_log', array());
+  if (!is_array($log)) { $log = array(); }
+  $people = get_users(['role' => JAXAUTH_ROLE]);
+  $seen = array();
+  foreach ($people as $wu) { $seen[$wu->ID] = true; }
+  foreach (get_users(['role' => 'administrator']) as $wa) { if (empty($seen[$wa->ID])) { $people[] = $wa; } }
+  $once = jaxauth_names_count($people);
+  $out = array();
+  foreach ($people as $wu) {
+    $x = jaxauth_last_login_ts($wu->ID, $wu->display_name, jaxauth_log_for($wu->display_name, $once, $log));
+    $sess = array();
+    if (class_exists('WP_Session_Tokens')) {
+      foreach ((array) WP_Session_Tokens::get_instance($wu->ID)->get_all() as $sx) {
+        $sess[] = array('login' => isset($sx['login']) ? wp_date('M j, Y g:i A', (int) $sx['login']) : '', 'expires' => isset($sx['expiration']) ? wp_date('M j, Y g:i A', (int) $sx['expiration']) : '');
+      }
+    }
+    $out[] = array('id' => $wu->ID, 'name' => $wu->display_name,
+                   'lastLogin' => $x[0] > 0 ? wp_date('M j, Y g:i A', $x[0]) : '', 'source' => $x[1],
+                   'stamp' => (int) get_user_meta($wu->ID, 'jaxauth_last_login', true) > 0 ? wp_date('M j, Y g:i A', (int) get_user_meta($wu->ID, 'jaxauth_last_login', true)) : '',
+                   'sessions' => $sess, 'lastSeen' => jaxauth_last_seen_label($wu->ID));
+  }
+  return array('ok' => true, 'now' => wp_date('M j, Y g:i A'), 'people' => $out);
 }
 
 /* -------------------- house design tokens --------------------
@@ -759,6 +842,12 @@ add_action('rest_api_init', function () {
     'methods' => 'POST',
     'permission_callback' => 'jaxauth_is_admin',
     'callback' => 'jaxauth_rest_create_user',
+  ]);
+  /* Ryan, Sep 11 2026: read-back for the Last login / Last seen fields - admins only, writes nothing */
+  register_rest_route('jaxauth/v1', '/admin/last-login', [
+    'methods' => 'GET',
+    'permission_callback' => 'jaxauth_is_admin',
+    'callback' => 'jaxauth_rest_last_login',
   ]);
   register_rest_route('jaxauth/v1', '/me/home', [
     'methods' => 'POST',
@@ -2378,6 +2467,7 @@ function jaxauth_admin_html() {
   /* Ryan, Sep 11 2026: the whole admin log, for the last-login fallback (jaxauth_last_login_label) */
   $llog = get_option('jaxauth_log', array());
   if (!is_array($llog)) { $llog = array(); }
+  $once = jaxauth_names_count($jxPeople);
   foreach ($jxPeople as $wu) {
     $bSlug = (string) get_user_meta($wu->ID, 'jaxauth_instructor', true);
     /* Ryan, Sep 11 2026: "As a rule, nobody working for JAXAERO can be both W2/salary
@@ -2404,8 +2494,9 @@ function jaxauth_admin_html() {
       'mx' => $mxSlug,
       'mxd' => ($mxSlug !== '' && function_exists('jaxmx_dept')) ? (string) jaxmx_dept($mxSlug) : '',
       'sal' => ($mxSlug !== '' && function_exists('jaxmx_is_salaried') && jaxmx_is_salaried($mxSlug)) ? 1 : 0,
-      /* Ryan, Sep 11 2026: last sign-in, shown next to the name on the detail card ('' = none on record) */
-      'll' => jaxauth_last_login_label($wu->ID, $wu->display_name, $llog),
+      /* Ryan, Sep 11 2026: last sign-in and last visit, shown next to the name on the detail card ('' = none on record) */
+      'll' => jaxauth_last_login_label($wu->ID, $wu->display_name, jaxauth_log_for($wu->display_name, $once, $llog)),
+      'ls' => jaxauth_last_seen_label($wu->ID),
     ];
   }
   $acd0 = get_option('jaxac_data_last', array());
@@ -2467,6 +2558,7 @@ function jaxauth_admin_html() {
         <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Name</label><input id="dn" autocomplete="off"></div>
         <?php /* Ryan, Sep 11 2026: "add a Last Login date and time next to the user name" - read only, like Email */ ?>
         <div class="fld" style="flex:1;min-width:170px;margin:0"><label>Last login</label><input id="dll" readonly title="When this person last signed in, on the dashboard sign-in page or in WordPress"></div>
+        <div class="fld" style="flex:1;min-width:170px;margin:0"><label>Last seen</label><input id="dls" readonly title="When this person last opened a page while signed in (a sign-in can stay alive for 14 days, so this can be much later than the last login)"></div>
         <div class="fld" style="flex:1;min-width:170px;margin:0"><label>Email</label><input id="de" readonly></div>
         <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Pay page binding</label><select id="db"></select></div>
         <label class="small" style="display:flex;align-items:center;gap:6px;padding-bottom:4px"><input type="checkbox" id="dd"> Disabled</label>
@@ -2645,6 +2737,7 @@ function jaxauth_admin_html() {
     hmPend=u.hm||'';
     document.getElementById('dn').value=u.n;
     document.getElementById('dll').value=u.ll||'No sign-in on record';
+    document.getElementById('dls').value=u.ls||'Not recorded yet';
     document.getElementById('de').value=u.e;
     var db=document.getElementById('db');db.innerHTML='';
     var o0=document.createElement('option');o0.value='';o0.textContent='none';db.appendChild(o0);
