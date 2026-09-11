@@ -918,6 +918,19 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
      below, which reads it through jaxauth_canvas_widgets - so binding a person
      and starring their pay tab in the same save keeps the star. */
   update_user_meta($uid, 'jaxauth_instructor', $inst);
+  /* Ryan, Sep 11 2026: "As a rule, nobody working for JAXAERO can be both W2/salary and
+     1099 contractor." and "There should be a warning" - a warning, never a block. The
+     save above has already happened; this only reads the W2 timeclock binding
+     (snippet 18) so the audit line and the response can say so. The guards above and
+     their order are untouched. */
+  $w2Warn = '';
+  $w2Slug = function_exists('jaxmx_slug_for_user') ? (string) jaxmx_slug_for_user($uid) : '';
+  if ($w2Slug !== '' && $inst !== '') {
+    $w2Dept = (function_exists('jaxmx_dept') && jaxmx_dept($w2Slug) === 'admin') ? 'front desk' : 'MX';
+    $w2Sal = (function_exists('jaxmx_is_salaried') && jaxmx_is_salaried($w2Slug)) ? 'salaried' : 'hourly';
+    $w2Warn = 'Warning: ' . $user->display_name . ' is bound to the W2 timeclock (' . $w2Slug . ', ' . $w2Dept . ', ' . $w2Sal
+      . ') and to the 1099 pay page ' . $inst . '. Nobody may be both W2 and 1099.';
+  }
   /* starred home screen - only a granted widget that has a page qualifies */
   $homeSel = sanitize_text_field((string) $req->get_param('home'));
   $homePageKeys = array_values(array_diff(array_intersect(array_values((array) get_option('jaxauth_pages', [])), array_keys(jaxauth_registry())), ['access']));
@@ -956,8 +969,9 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
     . '. Gave: ' . ($added !== '' ? $added : 'none')
     . '. Removed: ' . ($removed !== '' ? $removed : 'none')
     . ($disabled === '1' ? '. Account disabled.' : '.')
-    . ' Aircraft: ' . ($ac ? implode('/', $ac) : 'none') . '.');
-  return ['ok' => true];
+    . ' Aircraft: ' . ($ac ? implode('/', $ac) : 'none') . '.'
+    . ($w2Warn !== '' ? ' WARNING: also bound to W2 timeclock ' . $w2Slug . '.' : ''));
+  return ['ok' => true, 'warn' => $w2Warn, 'mx' => (isset($w2Slug) ? (string) $w2Slug : '')];
 }
 
 function jaxauth_rest_ai_key(WP_REST_Request $req) {
@@ -2325,6 +2339,13 @@ function jaxauth_admin_html() {
   usort($jxPeople, function ($a, $b) { return strcasecmp($a->display_name, $b->display_name); });
   foreach ($jxPeople as $wu) {
     $bSlug = (string) get_user_meta($wu->ID, 'jaxauth_instructor', true);
+    /* Ryan, Sep 11 2026: "As a rule, nobody working for JAXAERO can be both W2/salary
+       and 1099 contractor." and "There should be a warning" - a warning, never a block.
+       Each row carries the W2 timeclock binding (snippet 18's jaxmx_mechanic, checked
+       against the roster), its department and whether it is salaried, so the detail
+       card can warn when the same person also holds a 1099 pay page binding. Read
+       only; every snippet 18 call is guarded, so with it off there is simply no warning. */
+    $mxSlug = function_exists('jaxmx_slug_for_user') ? (string) jaxmx_slug_for_user($wu->ID) : '';
     $users[] = [
       /* a no-email (lessor) account shows its sign-in name where the email would be */
       'id' => $wu->ID, 'n' => $wu->display_name, 'e' => ((string) $wu->user_email !== '' ? $wu->user_email : $wu->user_login),
@@ -2339,6 +2360,9 @@ function jaxauth_admin_html() {
          row reads ADMIN; 'wp' locks the toggle - nothing here can change it. */
       'a' => user_can($wu, JAXAUTH_CAP) || user_can($wu, 'manage_options'),
       'wp' => user_can($wu, 'manage_options'),
+      'mx' => $mxSlug,
+      'mxd' => ($mxSlug !== '' && function_exists('jaxmx_dept')) ? (string) jaxmx_dept($mxSlug) : '',
+      'sal' => ($mxSlug !== '' && function_exists('jaxmx_is_salaried') && jaxmx_is_salaried($mxSlug)) ? 1 : 0,
     ];
   }
   $acd0 = get_option('jaxac_data_last', array());
@@ -2390,7 +2414,8 @@ function jaxauth_admin_html() {
       <div id="ulist"></div>
     </div>
     <div class="mod">
-      <div class="err" id="aerr"></div><div class="okmsg" id="aok">Saved.</div>
+      <?php /* Ryan, Sep 11 2026: the W2/1099 warning - the house amber .note, shown by the script below; it never disables Save */ ?>
+      <div class="err" id="aerr"></div><div class="okmsg" id="aok">Saved.</div><div class="note" id="awarn" hidden></div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;border-bottom:1px solid var(--hair);padding-bottom:14px;margin-bottom:14px">
         <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Name</label><input id="dn" autocomplete="off"></div>
         <div class="fld" style="flex:1;min-width:170px;margin:0"><label>Email</label><input id="de" readonly></div>
@@ -2467,9 +2492,11 @@ function jaxauth_admin_html() {
   }
   function fail(m){aerr.textContent=m;aerr.classList.add('on');}
   function okFlash(){aok.classList.add('on');setTimeout(function(){aok.classList.remove('on');},1800);}
-  var aisaveBtn=document.getElementById('aisave');
-  if(aisaveBtn){aisaveBtn.addEventListener('click',function(){
-    aerr.classList.remove('on');
+  /* Sep 11 2026: the FOQA uploader below sat INSIDE the Save key click handler, so the
+     drop zone did nothing until Save key was clicked (and each click wired it again);
+     it also sent an undefined NONCE and built its route from location.origin, which is
+     the string null in a srcdoc frame. It now wires once on load, sends this page N
+     (the same wp_rest nonce snippet 17 uses) and takes its route from rest_url. */
   /* ---- FOQA deck upload. srcdoc-safe: block comments only, no closing script
      tag in any string. Calls the routes registered by snippet 17. ---- */
   (function(){
@@ -2477,10 +2504,9 @@ function jaxauth_admin_html() {
         ms=document.getElementById('fqaMsg'),ou=document.getElementById('fqaOut'),
         mo=document.getElementById('fqamonths');
     if(!z){return;}
-    var BASE=(location.origin||'')+'/wp-json/jaxfoqa/v1/';
+    var BASE=<?php echo wp_json_encode(esc_url_raw(rest_url('jaxfoqa/v1/'))); ?>;
     var parsed=null;
     function say(t,c){ms.textContent=t||'';ms.style.color=c==='e'?'var(--red)':(c==='k'?'var(--green)':'var(--ink2)');}
-    function esc(s){return String(s).replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];});}
     z.addEventListener('click',function(){fi.click();});
     ['dragenter','dragover'].forEach(function(e){z.addEventListener(e,function(ev){ev.preventDefault();ev.stopPropagation();z.style.borderColor='var(--ink)';z.style.background='var(--track)';});});
     ['dragleave','drop'].forEach(function(e){z.addEventListener(e,function(ev){ev.preventDefault();ev.stopPropagation();z.style.borderColor='var(--hair2)';z.style.background='var(--tint)';});});
@@ -2490,7 +2516,7 @@ function jaxauth_admin_html() {
       if(!/\.pptx$/i.test(file.name)){say('That is not a .pptx file.','e');return;}
       say('Reading '+file.name+'...');ou.style.display='none';
       var fd=new FormData();fd.append('file',file);
-      fetch(BASE+'upload',{method:'POST',credentials:'same-origin',headers:{'X-WP-Nonce':NONCE},body:fd})
+      fetch(BASE+'upload',{method:'POST',credentials:'same-origin',headers:{'X-WP-Nonce':N},body:fd})
         .then(function(r){return r.json();})
         .then(function(j){
           if(!j||!j.ok){say((j&&j.err)?j.err:'Could not read that file.','e');return;}
@@ -2499,7 +2525,7 @@ function jaxauth_admin_html() {
     }
     function show(p){
       var fo=p.found||{},mi=p.missing||[],h='';
-      h+='<b>'+esc(fo.label||'Month not found')+'</b> &middot; '+p.slideCount+' slides';
+      h+='<b>'+esc(fo.label||'Month not found')+'</b> \u00b7 '+p.slideCount+' slides';
       if(fo.cre_tier_2000!=null){h+='<br>Traffic proximity: '+fo.cre_tier_2000+' / '+(fo.cre_tier_1000!=null?fo.cre_tier_1000:'-')+' / '+(fo.cre_tier_500!=null?fo.cre_tier_500:'-')+' (2000/1000/500 ft)';}
       if(fo.braking_avg!=null){h+='<br>Braking: '+fo.braking_avg+' G';}
       if(fo.go_around_pct!=null){h+='<br>Go-around: '+fo.go_around_pct+'%';}
@@ -2514,7 +2540,7 @@ function jaxauth_admin_html() {
       var b=document.getElementById('fqaSave');if(b){b.disabled=true;}
       say('Saving...');
       fetch(BASE+'save-month',{method:'POST',credentials:'same-origin',
-        headers:{'Content-Type':'application/json','X-WP-Nonce':NONCE},
+        headers:{'Content-Type':'application/json','X-WP-Nonce':N},
         body:JSON.stringify({month_key:parsed.found.month_key,month:parsed.found})})
         .then(function(r){return r.json();})
         .then(function(j){
@@ -2523,7 +2549,9 @@ function jaxauth_admin_html() {
         }).catch(function(){say('Could not save.','e');if(b){b.disabled=false;}});
     }
   })();
-
+  var aisaveBtn=document.getElementById('aisave');
+  if(aisaveBtn){aisaveBtn.addEventListener('click',function(){
+    aerr.classList.remove('on');
     var v=document.getElementById('aikey').value.trim();
     if(!v){fail('Paste the key first.');return;}
     api('admin/ai-key',{key:v}).then(function(r){
@@ -2533,6 +2561,20 @@ function jaxauth_admin_html() {
   });}
   function cur(){for(var i=0;i<USERS.length;i++){if(USERS[i].id===sel){return USERS[i];}}return null;}
   function esc(s){var d=document.createElement('span');d.textContent=String(s);return d.innerHTML;}
+  /* Ryan, Sep 11 2026: "As a rule, nobody working for JAXAERO can be both W2/salary and
+     1099 contractor." and "There should be a warning" - so this only warns; Save stays
+     enabled. u.mx is the W2 timeclock binding, bs the 1099 pay page binding. */
+  function w2msg(u,bs){
+    if(!u||!u.mx||!bs){return '';}
+    return 'Warning: '+u.n+' is bound to the W2 timeclock ('+u.mx+', '+(u.mxd==='admin'?'front desk':'MX')+', '+(u.sal?'salaried':'hourly')+') and to the 1099 pay page '+bs+'. Nobody may be both W2 and 1099.';
+  }
+  /* evaluated against the binding the card would save (#db), falling back to the stored one */
+  function showW2(){
+    var u=cur(),w=document.getElementById('awarn');if(!w){return;}
+    var db=document.getElementById('db');
+    var m=w2msg(u,db?db.value:(u?u.b:''));
+    w.textContent=m;w.hidden=!m;
+  }
   function renderUsers(){
     var box=document.getElementById('ulist');box.innerHTML='';
     USERS.forEach(function(u){
@@ -2540,7 +2582,8 @@ function jaxauth_admin_html() {
       /* Ryan, Sep 6 2026 graphics and mobile review: title shows the full
          address when the row's own text is ellipsis-truncated (.urow .em). */
       b.innerHTML='<span><b>'+esc(u.n)+'</b><span class="em" title="'+esc(u.e)+'">'+esc(u.e)+(u.d?' - disabled':'')+'</span></span>'
-        +'<span class="chip">'+(u.d?'OFF':(u.a?'ADMIN':(u.b?(u.ct?'1099':'CFI'):'USER')))+'</span>';
+        +'<span class="chip">'+(u.d?'OFF':(u.a?'ADMIN':(u.b?(u.ct?'1099':'CFI'):'USER')))+'</span>'
+        +(w2msg(u,u.b)?'<span class="chip" style="margin-left:0;background:var(--amber-tint);color:var(--amber)" title="Also bound to the W2 timeclock '+esc(u.mx)+'. Nobody may be both W2 and 1099.">W2</span>':'');
       b.addEventListener('click',function(){sel=u.id;renderAll();});
       box.appendChild(b);
     });
@@ -2555,6 +2598,7 @@ function jaxauth_admin_html() {
     var o0=document.createElement('option');o0.value='';o0.textContent='none';db.appendChild(o0);
     SLUGS.forEach(function(s){var o=document.createElement('option');o.value=s;o.textContent=s;db.appendChild(o);});
     db.value=u.b||'';
+    showW2();
     document.getElementById('dd').checked=!!u.d;
     var adm=document.getElementById('adm');adm.classList.toggle('on',!!u.a);adm.disabled=!!u.wp;adm.style.opacity=(CANADM&&!u.wp)?'1':'.45';adm.title=u.wp?'WordPress administrator':(CANADM?'':'Only a WordPress administrator (Ryan) can change this');
     var mx=document.getElementById('mx');
@@ -2618,6 +2662,7 @@ function jaxauth_admin_html() {
     if(ok){done();return;}
     if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v.value).then(done);}
   });
+  document.getElementById('db').addEventListener('change',showW2);
   document.getElementById('adm').addEventListener('click',function(){
     var cu=cur();
     if(cu&&cu.wp){fail('That account is a WordPress administrator - always an admin.');return;}
@@ -2635,7 +2680,8 @@ function jaxauth_admin_html() {
       disabled:document.getElementById('dd').checked,
       admin:document.getElementById('adm').classList.contains('on')};
     api('admin/save-user',body).then(function(x){
-      if(x.s===200&&x.j&&x.j.ok){u.g=on;u.ac=ac;u.hm=body.home;hmPend=body.home;u.b=body.instructor;u.d=body.disabled;u.a=body.admin;if(body.name){u.n=body.name;}okFlash();renderUsers();renderDetail();
+      if(x.s===200&&x.j&&x.j.ok){u.g=on;u.ac=ac;u.hm=body.home;hmPend=body.home;u.b=body.instructor;u.d=body.disabled;u.a=body.admin;if(body.name){u.n=body.name;}if(typeof x.j.mx==='string'){u.mx=x.j.mx;}okFlash();renderUsers();renderDetail();
+        var aw=document.getElementById('awarn');if(aw&&typeof x.j.warn==='string'){aw.textContent=x.j.warn;aw.hidden=!x.j.warn;}
         LOG.unshift({t:'just now',who:'you',txt:'saved '+u.n+'.'});renderLog();return;}
       fail(x.j&&x.j.message?x.j.message:'Save failed.');
     }).catch(function(){fail('Could not reach the site.');});
