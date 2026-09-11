@@ -118,6 +118,10 @@ function jaxauth_registry() {
        This is that toggle. It adds the Edit hours tab inside Timeclock (MX); a tech
        without it sees the clock alone and asks a manager to fix a mistake. */
     'mxedit'    => ['Edit MX Hours', 'add or fix hours for every mechanic by pay period - the maintenance manager'],
+    /* Ryan, Sep 11 2026: "Create a toggle on and off tool from admin portal. Give John Amico access to it."
+       Gates the Edit button on the MX Overview work-order tiles (snippet 24, jaxmb_can_woedit). No tab of its
+       own - the tiles ride on mxtime. A correction lives on the dashboard; FSP itself is never changed. */
+    'woedit'    => ['Edit Work Orders', 'mark an FSP work order billed or closed on the MX Overview - a dashboard correction, FSP is not changed'],
     'tax'       => ['Sales Tax', 'aircraft sales tax page'],
     'lease'     => ['Leases', 'lease management - VR Leasing aircraft'],
     'depr'      => ['Depreciation', 'fixed assets - book and tax depreciation'],
@@ -925,7 +929,7 @@ function jaxauth_rest_save_user(WP_REST_Request $req) {
      their order are untouched. */
   $w2Warn = '';
   $w2Slug = function_exists('jaxmx_slug_for_user') ? (string) jaxmx_slug_for_user($uid) : '';
-  if ($w2Slug !== '' && $inst !== '') {
+  if ($w2Slug !== '' && $inst !== '' && (!function_exists('jaxpay_pays_1099') || jaxpay_pays_1099($inst))) {
     $w2Dept = (function_exists('jaxmx_dept') && jaxmx_dept($w2Slug) === 'admin') ? 'front desk' : 'MX';
     $w2Sal = (function_exists('jaxmx_is_salaried') && jaxmx_is_salaried($w2Slug)) ? 'salaried' : 'hourly';
     $w2Warn = 'Warning: ' . $user->display_name . ' is bound to the W2 timeclock (' . $w2Slug . ', ' . $w2Dept . ', ' . $w2Sal
@@ -2369,6 +2373,10 @@ function jaxauth_admin_html() {
   $acTails = (is_array($acd0) && !empty($acd0['fleet']) && is_array($acd0['fleet']))
     ? array_keys($acd0['fleet']) : array('N768SP', 'N146F', 'N1196M', 'N234ZG', 'N9711S');
   $slugs = array_keys((array) get_option('jaxpay_instructors', []));
+  /* Ryan, Sep 11 2026 (Chandara): only a pay page that actually pays - a rate on file, not salaried -
+     makes someone 1099; a salaried employee who flies is W2 only. Per slug, for the warning below. */
+  $p1099 = array();
+  foreach ($slugs as $s0) { $p1099[$s0] = function_exists('jaxpay_pays_1099') ? (bool) jaxpay_pays_1099($s0) : true; }
   $pageKeys = array_values(array_diff(array_unique(array_intersect(array_values((array) get_option('jaxauth_pages', [])), array_keys($reg))), ['access']));
   $log = get_option('jaxauth_log', []);
   if (!is_array($log)) { $log = []; }
@@ -2479,6 +2487,7 @@ function jaxauth_admin_html() {
   var REG=<?php echo wp_json_encode($reg); ?>;
   var CANADM=<?php echo current_user_can('manage_options') ? 'true' : 'false'; ?>;var USERS=<?php echo wp_json_encode($users); ?>;
   var SLUGS=<?php echo wp_json_encode($slugs); ?>;
+  var P1099=<?php echo wp_json_encode((object) $p1099); ?>;
   var ACTAILS=<?php echo wp_json_encode($acTails); ?>;
   var PKEYS=<?php echo wp_json_encode($pageKeys); ?>;
   var LOG=<?php echo wp_json_encode($log); ?>;
@@ -2566,6 +2575,7 @@ function jaxauth_admin_html() {
      enabled. u.mx is the W2 timeclock binding, bs the 1099 pay page binding. */
   function w2msg(u,bs){
     if(!u||!u.mx||!bs){return '';}
+    if(P1099&&Object.prototype.hasOwnProperty.call(P1099,bs)&&!P1099[bs]){return '';}
     return 'Warning: '+u.n+' is bound to the W2 timeclock ('+u.mx+', '+(u.mxd==='admin'?'front desk':'MX')+', '+(u.sal?'salaried':'hourly')+') and to the 1099 pay page '+bs+'. Nobody may be both W2 and 1099.';
   }
   /* evaluated against the binding the card would save (#db), falling back to the stored one */
