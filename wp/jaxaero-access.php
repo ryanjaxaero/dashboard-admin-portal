@@ -338,6 +338,39 @@ function jaxauth_log_add($txt) {
   update_option('jaxauth_log', $log, false);
 }
 
+/* Ryan, Sep 11 2026: "add a Last Login date and time next to the user name when you're on
+   that user's settings screen in the admin portal." WordPress keeps no such record, so every
+   sign-in stamps jaxauth_last_login (unix time) on the account: the dashboard sign-in form
+   (jaxauth_rest_login - wp_set_auth_cookie fires no hook of its own) and WordPress's own
+   wp-login.php through wp_login. A view-as preview is not a sign-in and neither is an
+   application-password REST call (the ops channel), so neither touches the stamp. Until an
+   account has one, the label falls back to the newest "<name> signed in." line still in the
+   admin log, which this snippet has written since August; nothing is stored on that path. */
+function jaxauth_touch_login($uid) {
+  $uid = (int) $uid;
+  if ($uid > 0) { update_user_meta($uid, 'jaxauth_last_login', (string) time()); }
+}
+add_action('wp_login', function ($login, $user) {
+  if ($user instanceof WP_User) { jaxauth_touch_login($user->ID); }
+}, 10, 2);
+function jaxauth_last_login_label($uid, $name, $log) {
+  $ts = (int) get_user_meta((int) $uid, 'jaxauth_last_login', true);
+  if ($ts > 0) { return wp_date('M j, Y g:i A', $ts); }
+  $want = sanitize_text_field((string) $name . ' signed in.');
+  foreach ((array) $log as $e) {
+    if (!is_array($e) || !isset($e['txt'], $e['t']) || $e['txt'] !== $want) { continue; }
+    /* the log line carries no year: this year, unless that would put it in the future */
+    $tz = wp_timezone();
+    $now = current_datetime();
+    $d = DateTime::createFromFormat('M j, g:i A Y', (string) $e['t'] . ' ' . $now->format('Y'), $tz);
+    if ($d && $d->getTimestamp() > $now->getTimestamp() + 86400) {
+      $d = DateTime::createFromFormat('M j, g:i A Y', (string) $e['t'] . ' ' . ((int) $now->format('Y') - 1), $tz);
+    }
+    return $d ? wp_date('M j, Y g:i A', $d->getTimestamp()) : (string) $e['t'];
+  }
+  return '';
+}
+
 /* -------------------- house design tokens --------------------
 
    docs/DESIGN-SYSTEM.md is the single source of truth for colour, type and
@@ -806,6 +839,7 @@ function jaxauth_rest_login(WP_REST_Request $req) {
     return jaxauth_generic_fail();
   }
   wp_set_auth_cookie($user->ID, true);
+  jaxauth_touch_login($user->ID);
   jaxauth_log_add($user->display_name . ' signed in.');
   $mustNow = get_user_meta($user->ID, 'jaxauth_must_change', true) === '1';
   $dest = $mustNow ? '' : jaxauth_default_dest($user);
@@ -2341,6 +2375,9 @@ function jaxauth_admin_html() {
     if (empty($jxSeen[$wa->ID])) { $jxPeople[] = $wa; $jxSeen[$wa->ID] = true; }
   }
   usort($jxPeople, function ($a, $b) { return strcasecmp($a->display_name, $b->display_name); });
+  /* Ryan, Sep 11 2026: the whole admin log, for the last-login fallback (jaxauth_last_login_label) */
+  $llog = get_option('jaxauth_log', array());
+  if (!is_array($llog)) { $llog = array(); }
   foreach ($jxPeople as $wu) {
     $bSlug = (string) get_user_meta($wu->ID, 'jaxauth_instructor', true);
     /* Ryan, Sep 11 2026: "As a rule, nobody working for JAXAERO can be both W2/salary
@@ -2367,6 +2404,8 @@ function jaxauth_admin_html() {
       'mx' => $mxSlug,
       'mxd' => ($mxSlug !== '' && function_exists('jaxmx_dept')) ? (string) jaxmx_dept($mxSlug) : '',
       'sal' => ($mxSlug !== '' && function_exists('jaxmx_is_salaried') && jaxmx_is_salaried($mxSlug)) ? 1 : 0,
+      /* Ryan, Sep 11 2026: last sign-in, shown next to the name on the detail card ('' = none on record) */
+      'll' => jaxauth_last_login_label($wu->ID, $wu->display_name, $llog),
     ];
   }
   $acd0 = get_option('jaxac_data_last', array());
@@ -2426,6 +2465,8 @@ function jaxauth_admin_html() {
       <div class="err" id="aerr"></div><div class="okmsg" id="aok">Saved.</div><div class="note" id="awarn" hidden></div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;border-bottom:1px solid var(--hair);padding-bottom:14px;margin-bottom:14px">
         <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Name</label><input id="dn" autocomplete="off"></div>
+        <?php /* Ryan, Sep 11 2026: "add a Last Login date and time next to the user name" - read only, like Email */ ?>
+        <div class="fld" style="flex:1;min-width:170px;margin:0"><label>Last login</label><input id="dll" readonly title="When this person last signed in, on the dashboard sign-in page or in WordPress"></div>
         <div class="fld" style="flex:1;min-width:170px;margin:0"><label>Email</label><input id="de" readonly></div>
         <div class="fld" style="flex:1;min-width:150px;margin:0"><label>Pay page binding</label><select id="db"></select></div>
         <label class="small" style="display:flex;align-items:center;gap:6px;padding-bottom:4px"><input type="checkbox" id="dd"> Disabled</label>
@@ -2603,6 +2644,7 @@ function jaxauth_admin_html() {
     var u=cur();if(!u){return;}
     hmPend=u.hm||'';
     document.getElementById('dn').value=u.n;
+    document.getElementById('dll').value=u.ll||'No sign-in on record';
     document.getElementById('de').value=u.e;
     var db=document.getElementById('db');db.innerHTML='';
     var o0=document.createElement('option');o0.value='';o0.textContent='none';db.appendChild(o0);
